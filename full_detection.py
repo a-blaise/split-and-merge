@@ -27,18 +27,15 @@ from Features import Feature, list_features
 subnets = {}
 original_subnets = []
 
-# Check which packets do not belong to any identified MAWI subnetwork (neither source IP nor destination IP)
 def check_orphans(row, subs):
+    """Check which packets do not belong to any identified MAWI subnetwork (neither source IP nor destination IP)."""
     found = False
     IP_src = ipaddress.IPv4Address(row['IP_src'])
     IP_dst = ipaddress.IPv4Address(row['IP_dst'])
 
     for key in subs:
         if key != '':
-            if '+' in key:
-                keys = key.split('+')
-            else:
-                keys = [key]
+            keys = key.split('+')
             for k in keys:
                 if IP_src in ipaddress.IPv4Network(k, strict=False) or IP_dst in ipaddress.IPv4Network(k, strict=False):
                     found = True
@@ -46,27 +43,24 @@ def check_orphans(row, subs):
     if found == False:
         print(row['IP_src'], row['IP_dst'], row['port_src'], row['port_dst'])
 
-# Associate the destination IP address with its desanonymized subnetwork
 def keep_wide(IP_dst, subs):
-    # make a modif to return not this but the true desanonymised IP address
+    """Associate the destination IP address with its desanonymized subnetwork."""
     rep = np.nan
     for i, key in enumerate(subs):
-        if len(key) != 0:
-            if '+' in key:
-                keys = key.split('+')
-            else:
-                keys = [key]
+        if key != '':
+            keys = key.split('+')
             for k in keys:
                 if ipaddress.IPv4Address(IP_dst) in ipaddress.IPv4Network(k, strict=False):
                     rep = original_subnets[i]
                     break
     return rep
 
-# Get all traffic from a given period (2016 or 2018), divide it between subnetworks,
-# then aggregate packets by port and compute feature time-series for each port in each subnetwork.
 def compute_subnets():
-    if not os.path.exists(PATH_PACKETS):
-        os.mkdir(PATH_PACKETS)
+    """
+    Get all traffic from a given period (2016 or 2018), divide it between subnetworks,
+    then aggregate packets by port and compute feature time-series for each port in each subnetwork.
+    """
+    if not os.path.exists(PATH_PACKETS): os.mkdir(PATH_PACKETS)
     for AGG in AGGs:
         if AGG:
             with open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '.csv', 'a') as file:
@@ -97,6 +91,10 @@ def compute_subnets():
                 if rep[1] == date:
                     day_subnets.append(rep[0])
                     break
+
+        tab_columns = [['IP_src', 'nunique', 'nb_src'], ['IP_dst', 'nunique', 'nb_dst'], ['port_src', 'nunique'],
+            ['SYN+ACK', 'sum'], ['RST+ACK', 'sum'], ['FIN+ACK', 'sum'], ['SYN', 'sum'], ['ACK', 'sum'], ['RST', 'sum'],
+            ['size', 'mean', 'mean_size'], ['size', 'std', 'sts_size']]
 
         for chunk in chunks:
             for AGG in AGGs:
@@ -172,9 +170,11 @@ def compute_subnets():
                         c_dst.to_csv(path_or_buf=PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', index=False, header=False, mode='a')
             break
 
-# Given the port-centric features time-series, launch anomaly detection module in each subnetwork.
-# Generates an evaluation file named eval_*feature* with the results.
 def evaluation_ports():
+    """
+    Given the port-centric features time-series, launch anomaly detection module in each subnetwork.
+    Generate an evaluation file named eval_*feature* with the results.
+    """
     value = pd.DataFrame()
 
     for AGG in AGGs:
@@ -184,8 +184,7 @@ def evaluation_ports():
             prefix = '_agg'
         else:            
             prefix = '_separated'
-        value = pd.read_csv(PATH_PACKETS + 'packets_subnets' + prefix + '_' + str(PERIOD) + '.csv',
-            dtype = {'nb_packets': int})
+        value = pd.read_csv(PATH_PACKETS + 'packets_subnets' + prefix + '_' + str(PERIOD) + '.csv', dtype = {'nb_packets': int})
         value = value[value.nb_packets > N_MIN]
 
         for feat in list_features:
@@ -253,7 +252,7 @@ def evaluation_ports():
                 feat.to_write = feat.to_write + ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n'
             string_total = string_total + ';'.join([el[:-1] for el in mzscores_total.values()]) + '\n'
 
-        # Generates one evaluation file per feature.
+        # Generate one evaluation file per feature.
         for feat in list_features:
             with open(PATH_EVAL + 'eval_' + feat.attribute + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) + '.csv', 'a') as file_feature:
                 file_feature.write(feat.to_write)
@@ -264,8 +263,8 @@ def evaluation_ports():
             file.write(string_total)
             file.close()
 
-# Lambda function to get the number of anomalies given a list of anomalous subnets
 def get_nb_alarms(x):
+    """Lambda function to get the number of anomalies given a list of anomalous subnets"""
     rep = ''
     if str(x) != 'nan':
         nb_x = str(x).count('+')
@@ -276,8 +275,8 @@ def get_nb_alarms(x):
         return rep
     return np.nan
 
-# In evaluation ports files: convert anomalous subnets to number of anomalous subnets (= number of anomalies)
 def eval_scores():
+    """ In evaluation ports files: convert anomalous subnets to number of anomalous subnets (= number of anomalies)"""
     list_features.append(Feature('total'))
     for feat in list_features:
         for AGG in AGGs:
@@ -313,8 +312,8 @@ def main(argv):
     original_subnets = list(subnets.keys())
 
     compute_subnets()
-    evaluation_ports()
-    eval_scores()
+    # evaluation_ports()
+    # eval_scores()
     return 0
 
 if __name__ == "__main__":
