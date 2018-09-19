@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright 2018 @ Agathe Blaise.
 
 # This program is free software: you can redistribute it and/or modify
@@ -24,18 +22,15 @@ import os
 from Settings import *
 from Features import Feature, list_features
 
-subnets = {}
-original_subnets = []
-
-def check_orphans(row, subs):
+def check_orphans(row, daily_subnets):
     """Check which packets do not belong to any identified MAWI subnetwork (neither source IP nor destination IP)."""
     found = False
     IP_src = ipaddress.IPv4Address(row['IP_src'])
     IP_dst = ipaddress.IPv4Address(row['IP_dst'])
 
-    for key in subs:
+    for key in daily_subnets:
         if key != '':
-            keys = key.split('+')
+            keys = key.split('|')
             for k in keys:
                 if IP_src in ipaddress.IPv4Network(k, strict=False) or IP_dst in ipaddress.IPv4Network(k, strict=False):
                     found = True
@@ -43,19 +38,19 @@ def check_orphans(row, subs):
     if found == False:
         print(row['IP_src'], row['IP_dst'], row['port_src'], row['port_dst'])
 
-def keep_wide(IP_dst, subs):
+def keep_wide(IP_dst, original_subnets, daily_subnets):
     """Associate the destination IP address with its desanonymized subnetwork."""
     rep = np.nan
-    for i, key in enumerate(subs):
+    for i, key in enumerate(daily_subnets):
         if key != '':
-            keys = key.split('+')
+            keys = key.split('|')
             for k in keys:
                 if ipaddress.IPv4Address(IP_dst) in ipaddress.IPv4Network(k, strict=False):
                     rep = original_subnets[i]
                     break
     return rep
 
-def compute_subnets():
+def compute_subnets(subnets, original_subnets):
     """
     Get all traffic from a given period (2016 or 2018), divide it between subnetworks,
     then aggregate packets by port and compute feature time-series for each port in each subnetwork.
@@ -82,15 +77,13 @@ def compute_subnets():
                 'SYN': int, 'ACK': int, 'RST': int, 'size': int})
         
         # Find subnets of the day and put them on a list
-        day_subnets = []
+        daily_subnets = []
 
         for k in subnets.values():
             l = list(k.keys())
             for el in l:
-                rep = el.split('-')
-                if rep[1] == date:
-                    day_subnets.append(rep[0])
-                    break
+                if date in el:
+                    day_subnets.append(el.split('-')[0])
 
         tab_columns = [['IP_src', 'nunique', 'nb_src'], ['IP_dst', 'nunique', 'nb_dst'], ['port_src', 'nunique'],
             ['SYN+ACK', 'sum'], ['RST+ACK', 'sum'], ['FIN+ACK', 'sum'], ['SYN', 'sum'], ['ACK', 'sum'], ['RST', 'sum'],
@@ -100,7 +93,7 @@ def compute_subnets():
             for AGG in AGGs:
                 if AGG:
                     value = chunk.copy()
-                    value['IP_dst'] = value['IP_dst'].apply(keep_wide, args=(day_subnets,))
+                    value['IP_dst'] = value['IP_dst'].apply(keep_wide, args=(original_subnets, daily_subnets))
                     value = value.dropna(how='any', subset=['IP_dst'])
                     if value.empty == False:
                         dataset_agg_dst = value.groupby(['port_dst'])
@@ -133,8 +126,8 @@ def compute_subnets():
                     c_dst.to_csv(path_or_buf=PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '.csv', index=False, header=False, mode='a')
                 else:
                     # Facultative line: permits to see which IP addresses do not belong to a desanonymised MAWI subnetwork.
-                    # chunk.apply(check_orphans, args=(day_subnets,), axis=1)
-                    chunk['sub'] = chunk['IP_dst'].apply(keep_wide, args=(day_subnets,))
+                    # chunk.apply(check_orphans, args=(daily_subnets,), axis=1)
+                    chunk['sub'] = chunk['IP_dst'].apply(keep_wide, args=(original_subnets, daily_subnets))
                     chunk = chunk.dropna(subset=['sub'])
                     for sub in chunk['sub'].unique():
                         df = chunk.loc[chunk['sub'] == sub]
@@ -170,7 +163,7 @@ def compute_subnets():
                         c_dst.to_csv(path_or_buf=PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', index=False, header=False, mode='a')
             break
 
-def evaluation_ports():
+def evaluation_ports(original_subnets):
     """
     Given the port-centric features time-series, launch anomaly detection module in each subnetwork.
     Generate an evaluation file named eval_*feature* with the results.
@@ -212,8 +205,6 @@ def evaluation_ports():
                     feat.sub_time_vect['all'] = feat.time_vect[:]
             else:
                 for subnet in original_subnets:
-                    for feat in list_features:
-                        del feat.time_vect[:]
                     for date in dates:
                         rep = value[(value.date == int(date)) & (value.key == subnet) & (value.port == p)]
                         for feat in list_features:
@@ -223,6 +214,7 @@ def evaluation_ports():
                                 feat.time_vect.append(np.nan)
                     for feat in list_features:
                         feat.sub_time_vect[subnet] = feat.time_vect[:]
+                        del feat.time_vect[:]
 
             string_total = string_total + str(p) + ';'
             mzscores_total = {}
@@ -230,9 +222,7 @@ def evaluation_ports():
                 mzscores_total[dates[i]] = ''
             for feat in list_features:
                 feat.to_write = feat.to_write + str(p) + ';'
-                # For each day
                 for i in range(N_DAYS, len(dates)):
-                    # For each subnet k containing list of packets v
                     for k, v in feat.sub_time_vect.items():
                         if math.isnan(v[i]) == False:
                             # The nb_packets feature is a specific case and enables only to identify emerging ports
@@ -265,14 +255,8 @@ def evaluation_ports():
 
 def get_nb_alarms(x):
     """Lambda function to get the number of anomalies given a list of anomalous subnets"""
-    rep = ''
     if str(x) != 'nan':
-        nb_x = str(x).count('+')
-        if '133' in str(x):
-            nb_x = nb_x - str(x).count('133')/2
-        rep = '+' + str(int(nb_x))
-        rep += ',-' + str(int(str(x).count('-')))
-        return rep
+        return '+' + str(str(x).count('-')) + ',-' + str(str(x).count('-'))
     return np.nan
 
 def eval_scores():
@@ -287,18 +271,18 @@ def eval_scores():
                 + str(N_MIN) + '.csv', sep=';', index_col=0)
             ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
             ports.to_csv(PATH_EVAL + 'eval_' + feat.attribute + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' 
-                + str(N_MIN) + '_score.csv', sep = ';')
+                + str(N_MIN) + '_score_test2.csv', sep = ';')
 
 def main(argv):
-    global subnets
-    global original_subnets
+    subnets = {}
+    original_subnets = []
 
     sub_df = pd.read_csv(PATH_SUBNETS + 'subnets_' + str(PERIOD) + '.csv', index_col=0, sep=',')
     if PERIOD == 2018:
         sub_df = sub_df.append(pd.read_csv(PATH_SUBNETS + 'subnets_2017.csv', index_col=0, sep=',')) # add last months of 2017 if 2018 period
 
     for subnet in sub_df.columns:
-        if subnet not in subnets.keys():
+        if subnet not in subnets:
             subnets[subnet] = {}
         for date in sub_df.index:
             rep = str(sub_df.loc[date][subnet])
@@ -311,9 +295,9 @@ def main(argv):
 
     original_subnets = list(subnets.keys())
 
-    compute_subnets()
-    # evaluation_ports()
-    # eval_scores()
+    compute_subnets(subnets, original_subnets)
+    evaluation_ports(original_subnets)
+    eval_scores()
     return 0
 
 if __name__ == "__main__":
