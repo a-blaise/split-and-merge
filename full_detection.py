@@ -49,7 +49,7 @@ def keep_wide(IP_dst, original_subnets, daily_subnets):
                     return original_subnets[i]
     return np.nan
 
-def compute_subnets(subnets, original_subnets, sub_df):
+def compute_subnets(original_subnets, sub_df):
     """
     Get all traffic from a given period (2016 or 2018), divide it between subnetworks,
     then aggregate packets by port and compute feature time-series for each port in each subnetwork.
@@ -58,14 +58,14 @@ def compute_subnets(subnets, original_subnets, sub_df):
         os.mkdir(PATH_PACKETS)
 
     # Create one file for the whole dataset (subnets aggregated) and one for subnets not aggregated (separated)
-    files = [open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '_score_test2.csv', 'a'),
-        open(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '_score_test2.csv', 'a')]
+    files = [open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '.csv', 'a'),
+        open(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', 'a')]
 
-    # for file in files:
-    #     file.write('date,')
-    #     if 'separated' in file.name:
-    #         file.write('key,')
-    #     file.write('port,nb_packets,port_src,SYN,mean_size,std_size,src_div_index,dst_div_index,port_div_index\n')
+    for file in files:
+        file.write('date,')
+        if 'separated' in file.name:
+            file.write('key,')
+        file.write('port,nb_packets,port_src,SYN,mean_size,std_size,src_div_index,dst_div_index,port_div_index\n')
 
     for date in dates:
         if PERIOD == 2018 and int(date) > 1000: # 1001 = first of October. From October to December -> 2017
@@ -80,15 +80,10 @@ def compute_subnets(subnets, original_subnets, sub_df):
         # Find subnets of the day and put them on a list
         daily_subnets = sub_df[sub_df.date == date].iloc[0, 1:].tolist()
 
-        tab_columns = [['IP_src', 'nunique', 'nb_src'], ['IP_dst', 'nunique', 'nb_dst'], ['port_src', 'nunique'],
-            ['SYN+ACK', 'sum'], ['RST+ACK', 'sum'], ['FIN+ACK', 'sum'], ['SYN', 'sum'], ['ACK', 'sum'], ['RST', 'sum'],
-            ['size', 'mean', 'mean_size'], ['size', 'std', 'sts_size']]
-
         for chunk in chunks:
             for AGG in AGGs:
                 if AGG:
                     value = chunk.copy()
-                    # value['IP_dst'] = value['IP_dst'].replace(to_replace=all, value=)
                     value['IP_dst'] = value['IP_dst'].apply(keep_wide, args=(original_subnets, daily_subnets))
                     value = value.dropna(how='any', subset=['IP_dst'])
                     if value.empty == False:
@@ -252,7 +247,7 @@ def evaluation_ports(original_subnets):
 def get_nb_alarms(x):
     """Lambda function to get the number of anomalies given a list of anomalous subnets"""
     if str(x) != 'nan':
-        return '+' + str(str(x).count('-')) + ',-' + str(str(x).count('-'))
+        return '+' + str(str(x).count('+')) + ',-' + str(str(x).count('-'))
     return np.nan
 
 def eval_scores():
@@ -267,7 +262,7 @@ def eval_scores():
                 + str(N_MIN) + '.csv', sep=';', index_col=0)
             ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
             ports.to_csv(PATH_EVAL + 'eval_' + feat.attribute + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' 
-                + str(N_MIN) + '_score_test2.csv', sep = ';')
+                + str(N_MIN) + '_score.csv', sep = ';')
 
 def main(argv):
     subnets = {}
@@ -285,8 +280,8 @@ def main(argv):
             subnets[subnet][str(rep) + '-' + date] = pd.DataFrame()
 
     compute_subnets(subnets, original_subnets, sub_df)
-    # evaluation_ports(original_subnets)
-    # eval_scores()
+    evaluation_ports(original_subnets)
+    eval_scores()
     return 0
 
 if __name__ == "__main__":

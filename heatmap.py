@@ -221,7 +221,7 @@ def color(pos):
     return color
 
 def main(argv):
-    # heat_map_scores()
+    heat_map_scores()
     heatmap_anomalies()
     return 0
 
