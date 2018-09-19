@@ -21,6 +21,7 @@ import math
 import os
 from Settings import *
 from Features import Feature, list_features
+import time
 
 def check_orphans(row, daily_subnets):
     """Check which packets do not belong to any identified MAWI subnetwork (neither source IP nor destination IP)."""
@@ -40,31 +41,31 @@ def check_orphans(row, daily_subnets):
 
 def keep_wide(IP_dst, original_subnets, daily_subnets):
     """Associate the destination IP address with its desanonymized subnetwork."""
-    rep = np.nan
     for i, key in enumerate(daily_subnets):
-        if key != '':
+        if str(key) != 'nan':
             keys = key.split('|')
             for k in keys:
                 if ipaddress.IPv4Address(IP_dst) in ipaddress.IPv4Network(k, strict=False):
-                    rep = original_subnets[i]
-                    break
-    return rep
+                    return original_subnets[i]
+    return np.nan
 
-def compute_subnets(subnets, original_subnets):
+def compute_subnets(subnets, original_subnets, sub_df):
     """
     Get all traffic from a given period (2016 or 2018), divide it between subnetworks,
     then aggregate packets by port and compute feature time-series for each port in each subnetwork.
     """
-    if not os.path.exists(PATH_PACKETS): os.mkdir(PATH_PACKETS)
-    for AGG in AGGs:
-        if AGG:
-            with open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '.csv', 'a') as file:
-                file.write('date,port,nb_packets,port_src,SYN,mean_size,std_size,src_div_index,dst_div_index,port_div_index\n')
-                file.close()
-        else:
-            with open(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', 'a') as file:
-                file.write('date,key,port,nb_packets,port_src,SYN,mean_size,std_size,src_div_index,dst_div_index,port_div_index\n')
-                file.close()
+    if not os.path.exists(PATH_PACKETS):
+        os.mkdir(PATH_PACKETS)
+
+    # Create one file for the whole dataset (subnets aggregated) and one for subnets not aggregated (separated)
+    files = [open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '_score_test2.csv', 'a'),
+        open(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '_score_test2.csv', 'a')]
+
+    # for file in files:
+    #     file.write('date,')
+    #     if 'separated' in file.name:
+    #         file.write('key,')
+    #     file.write('port,nb_packets,port_src,SYN,mean_size,std_size,src_div_index,dst_div_index,port_div_index\n')
 
     for date in dates:
         if PERIOD == 2018 and int(date) > 1000: # 1001 = first of October. From October to December -> 2017
@@ -77,13 +78,7 @@ def compute_subnets(subnets, original_subnets):
                 'SYN': int, 'ACK': int, 'RST': int, 'size': int})
         
         # Find subnets of the day and put them on a list
-        daily_subnets = []
-
-        for k in subnets.values():
-            l = list(k.keys())
-            for el in l:
-                if date in el:
-                    day_subnets.append(el.split('-')[0])
+        daily_subnets = sub_df[sub_df.date == date].iloc[0, 1:].tolist()
 
         tab_columns = [['IP_src', 'nunique', 'nb_src'], ['IP_dst', 'nunique', 'nb_dst'], ['port_src', 'nunique'],
             ['SYN+ACK', 'sum'], ['RST+ACK', 'sum'], ['FIN+ACK', 'sum'], ['SYN', 'sum'], ['ACK', 'sum'], ['RST', 'sum'],
@@ -93,6 +88,7 @@ def compute_subnets(subnets, original_subnets):
             for AGG in AGGs:
                 if AGG:
                     value = chunk.copy()
+                    # value['IP_dst'] = value['IP_dst'].replace(to_replace=all, value=)
                     value['IP_dst'] = value['IP_dst'].apply(keep_wide, args=(original_subnets, daily_subnets))
                     value = value.dropna(how='any', subset=['IP_dst'])
                     if value.empty == False:
@@ -123,7 +119,7 @@ def compute_subnets(subnets, original_subnets):
                     c_dst.insert(0, 'date', date)
                     c_dst = c_dst.drop(['SYN+ACK', 'RST+ACK', 'FIN+ACK', 'ACK', 'RST', 'nb_src', 'nb_dst'], axis=1)
                     c_dst = c_dst.rename(index=str, columns={'port_dst': 'port'})
-                    c_dst.to_csv(path_or_buf=PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '.csv', index=False, header=False, mode='a')
+                    c_dst.to_csv(path_or_buf=files[0], index=False, header=False, mode='a')
                 else:
                     # Facultative line: permits to see which IP addresses do not belong to a desanonymised MAWI subnetwork.
                     # chunk.apply(check_orphans, args=(daily_subnets,), axis=1)
@@ -160,7 +156,7 @@ def compute_subnets(subnets, original_subnets):
                         c_dst.insert(0, 'date', date)
                         c_dst.insert(1, 'key', sub)
                         c_dst = c_dst.rename(index=str, columns={'port_dst': 'port'})
-                        c_dst.to_csv(path_or_buf=PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', index=False, header=False, mode='a')
+                        c_dst.to_csv(path_or_buf=files[1], index=False, header=False, mode='a')
             break
 
 def evaluation_ports(original_subnets):
@@ -275,29 +271,22 @@ def eval_scores():
 
 def main(argv):
     subnets = {}
-    original_subnets = []
 
-    sub_df = pd.read_csv(PATH_SUBNETS + 'subnets_' + str(PERIOD) + '.csv', index_col=0, sep=',')
+    sub_df = pd.read_csv(PATH_SUBNETS + 'subnets_' + str(PERIOD) + '.csv', dtype={'date': str})
+    original_subnets = sub_df.columns[1:].tolist()
+
     if PERIOD == 2018:
-        sub_df = sub_df.append(pd.read_csv(PATH_SUBNETS + 'subnets_2017.csv', index_col=0, sep=',')) # add last months of 2017 if 2018 period
+        sub_df = sub_df.append(pd.read_csv(PATH_SUBNETS + 'subnets_2017.csv', dtype={'date': str})) # add last months of 2017 if 2018 period
 
-    for subnet in sub_df.columns:
-        if subnet not in subnets:
-            subnets[subnet] = {}
-        for date in sub_df.index:
-            rep = str(sub_df.loc[date][subnet])
-            if len(str(date)) == 3:
-                date = '0' + str(date)
-            if rep != 'nan':
-                subnets[subnet][rep + '-' + str(date)] = pd.DataFrame()
-            else:
-                subnets[subnet]['-' + str(date)] = pd.DataFrame()
+    for subnet in original_subnets:
+        subnets[subnet] = {}
+        for date in sub_df['date']:
+            rep = sub_df[sub_df.date == date][subnet].item()
+            subnets[subnet][str(rep) + '-' + date] = pd.DataFrame()
 
-    original_subnets = list(subnets.keys())
-
-    compute_subnets(subnets, original_subnets)
-    evaluation_ports(original_subnets)
-    eval_scores()
+    compute_subnets(subnets, original_subnets, sub_df)
+    # evaluation_ports(original_subnets)
+    # eval_scores()
     return 0
 
 if __name__ == "__main__":
