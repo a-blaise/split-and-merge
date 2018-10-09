@@ -25,45 +25,28 @@ from matplotlib.backends.backend_pdf import PdfPages
 from Settings import *
 from Features import Feature, Figure, list_features, list_figures
 
-def plot_time_series():
+def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
     subnets = {}
-    original_subnets = []
 
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)
     pdf = PdfPages(PATH_FIGURES + 'time_series.pdf')
 
     for AGG in AGGs:
-        prefix = '_separated'
         if AGG:
             prefix = '_agg'
+        else:
+            prefix = '_separated'
+
         values = pd.read_csv(PATH_PACKETS + 'packets_subnets' + prefix + '_' + str(PERIOD) + '.csv', dtype={'date': int, 'port': int, 
             'nb_packets': int, 'nb_src': int, 'nb_dst':int, 'div_index_src': float, 'div_index_dst': float, 'SYN': float, 
             'mean_size': float, 'std_size': float})
         values = values[values.nb_packets > N_MIN]
-        ports = sorted(list(set(values.port.tolist())))
+        ports = values.port.unique()
 
-        sub_df = pd.read_csv(PATH_SUBNETS + 'subnets_' + str(PERIOD) + '.csv', index_col=0, sep=',')
-        if PERIOD == 2018:
-            sub_df = sub_df.append(pd.read_csv(PATH_SUBNETS + 'subnets_2017.csv', index_col=0, sep=',')) # add last months of 2017 if 2018 period
-
-        for subnet in sub_df.columns:
-            if subnet not in subnets.keys():
-                subnets[subnet] = {}
-            for date in sub_df.index:
-                rep = str(sub_df.loc[date][subnet])
-                if len(str(date)) == 3:
-                    date = '0' + str(date)
-                if rep != 'nan':
-                    subnets[subnet][rep + '-' + str(date)] = pd.DataFrame()
-                else:
-                    subnets[subnet]['-' + str(date)] = pd.DataFrame()
-
-        original_subnets = list(subnets.keys())
-        
         # Plot only the results for the 10 first ports
-        for p in ports[:1]:
+        for p in ports[:10]:
             for fig in list_figures:
                 if AGG:
                     fig.reset_object()
@@ -116,8 +99,6 @@ def plot_time_series():
                     fig_totake = fig.fig_z
                 for k, v in fig.sub_time_vect.items():
                     for i in range(N_DAYS, len(v)):
-                        mean = np.nanmean(v[i - N_DAYS:i-1])
-                        std = np.nanstd(v[i - N_DAYS:i-1])
                         median = np.nanmedian(v[i - N_DAYS:i-1])
                         median_absolute_deviation = np.nanmedian([np.abs(y - median) for y in v[i - N_DAYS:i-1]])
                         fig.mzscores[dates[i]] = [0.6745 * (v[i] - median) / median_absolute_deviation]
@@ -241,9 +222,9 @@ def main(argv):
             rep = sub_df[sub_df.date == date][subnet].item()
             subnets[subnet][str(rep) + '-' + date] = pd.DataFrame()
 
-    # plot_time_series()
+    plot_time_series(original_subnets)
     # get_frequency_anomalies()
-    compute_mse_feature(original_subnets)
+    # compute_mse_feature(original_subnets)
     return 0
 
 if __name__ == "__main__":
