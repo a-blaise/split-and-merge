@@ -103,13 +103,13 @@ def heat_map_scores():
     # ax.set_xticklabels([x[0:2] + '/' + x[2:] for x in result.columns.values])
 
     # # Rotate the tick labels and set their alignment.
-    # plt.setp(ax.get_xticklabels(), rotation=40, ha="right", rotation_mode="anchor")
+    # plt.setp(ax.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
 
     # # Loop over data dimensions and create text annotations.
     # for i in range(0, data.shape[0]):
     #     for j in range(0, data.shape[1]):
     #         if not math.isnan(data_annot[i, j]):
-    #             color="black"
+    #             color='black'
     #             if i>6:
     #                 score = result.iloc[i,j]
     #                 df = ports.iloc[:, j]
@@ -121,29 +121,28 @@ def heat_map_scores():
 
     #                 # arrow_properties = dict(width=0.1, headlength=4, headwidth=5, facecolor='black', shrink=0.05)
     #                 # ax.annotate('ADB exploit', xy=(6, 15.5), xytext=(4, 17.5), arrowprops=arrow_properties)
-    #                 # text = ax.text(4, 18.2, 'port 5555 - 0.1 %', color="black", size=7)
+    #                 # text = ax.text(4, 18.2, 'port 5555 - 0.1 %', color='black', size=7)
     #                 # # ax.annotate('Exploit', xy=(10, 13.5), xytext=(8.5, 12), arrowprops=arrow_properties)
-    #                 # # text = ax.text(8.5, 12.5, 'port 7001 - <0.1 %', color="black", size=6.5)
+    #                 # # text = ax.text(8.5, 12.5, 'port 7001 - <0.1 %', color='black', size=6.5)
     #                 # ax.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.8), arrowprops=arrow_properties)
-    #                 # text = ax.text(11.5, 15.5, 'port 2000 - 0.3 %', color="black", size=7)
+    #                 # text = ax.text(11.5, 15.5, 'port 2000 - 0.3 %', color='black', size=7)
     #                 # ax.annotate('Hajime scan', xy=(13.5, 18), xytext=(15, 17.5), arrowprops=arrow_properties)
-    #                 # text = ax.text(15, 18.2, 'port 8291 - <0.1 %', color="black", size=7)
+    #                 # text = ax.text(15, 18.2, 'port 8291 - <0.1 %', color='black', size=7)
     #                 # # ax.annotate('Exploit', xy=(0, 14.5), xytext=(0, 16.5), arrowprops=arrow_properties)
-    #                 # # text = ax.text(0, 17, 'port 2222 - 0.1 %', color="black", size=6.5)
+    #                 # # text = ax.text(0, 17, 'port 2222 - 0.1 %', color='black', size=6.5)
     #                 # ax.annotate('Scan break', xy=(16.5, 16), xytext=(18, 15.5), arrowprops=arrow_properties)
-    #                 # text = ax.text(18, 16.2, 'port 23 - 2.4 %', color="black", size=7)
+    #                 # text = ax.text(18, 16.2, 'port 23 - 2.4 %', color='black', size=7)
     #                 # ax.annotate('Scan break', xy=(17.5, 15), xytext=(18, 15.5), arrowprops=arrow_properties)
-    #                 # text = ax.text(18, 16.2, 'port 23 - 2.4 %', color="black", size=7)
+    #                 # text = ax.text(18, 16.2, 'port 23 - 2.4 %', color='black', size=7)
     #                 # ax.annotate('Massive scan', xy=(5, 14.5), xytext=(5.6, 12.5), arrowprops=arrow_properties)
-    #                 # text = ax.text(5.6, 13.2, 'port 81 - <0.1 %', color="black", size=7)
+    #                 # text = ax.text(5.6, 13.2, 'port 81 - <0.1 %', color='black', size=7)
     #                 # ax.annotate('Massive scan', xy=(9, 15.5), xytext=(5.6, 12.5), arrowprops=arrow_properties)
-    #                 # text = ax.text(5.6, 13.2, 'port 81 - <0.1 %', color="black", size=7)
-    #             if i > 12: color="white"
+    #                 # text = ax.text(5.6, 13.2, 'port 81 - <0.1 %', color='black', size=7)
+    #             if i > 12: color='white'
     #             text = ax.text(j, i, int(data_annot[i, j]), 
-    #                 ha="center", va="center", color=color, size=8)
+    #                 ha='center', va='center', color=color, size=8)
 
-    # if not os.path.exists(PATH_FIGURES):
-    #     os.mkdir(PATH_FIGURES)
+    # if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
     # plt.savefig(path_join([PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD], 'png'), dpi=600,bbox_inches='tight')
 
 def get_sum_string(x):
@@ -176,7 +175,7 @@ def heatmap_anomalies():
                     if feat.attribute != 'nb_packets':
                         evaluation = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep = ';')
                         rep = evaluation[evaluation.port == index].loc[:, date]
-                        if rep.empty == False:
+                        if not rep.empty:
                             if str(rep.item()) == 'nan':
                                 anomalies.append(0)
                                 annotations.append(0)
@@ -209,38 +208,37 @@ def heatmap_anomalies():
     ax.set_xticklabels(['srcDivInd', 'dstDivInd', 'portDivInd', 'meanSize', 'stdSize', 'perSyn'])
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=20, ha="right", rotation_mode="anchor")
+    plt.setp(ax.get_xticklabels(), rotation=20, ha='right', rotation_mode='anchor')
 
     for edge, spine in ax.spines.items():
         spine.set_visible(False)
     ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
     ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
-    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
-    ax.tick_params(which="minor", bottom=False, left=False)
+    ax.grid(which='minor', color='w', linestyle='-', linewidth=3)
+    ax.tick_params(which='minor', bottom=False, left=False)
 
     ax.set_yticklabels(labels)
     ax.set_xticklabels(columns)
 
     # Loop over data dimensions and create text annotations.
-    for i in range(0, data.shape[0]):
-        for j in range(0, data.shape[1]):
-            annot = str(data_annot[i, j]).split(',')
-            if len(annot) == 1:
-                text = ax.text(j, i, '0',
-                    ha="center", va="center", color='black', size=10)
-            # 3 cases: two non-zero values, one non-zero value or two zero values
-            else:
-                if '0' in annot[0]:
-                    if '0' in annot[1]:
-                        text = ax.text(j, i, '0', ha="center", va="center", color='black', size=10)
-                    else:
-                        text = ax.text(j, i, annot[1], ha="center", va="center", color=color(annot[1]), size=10)
+    for i, j in zip(range(0, data.shape[0]), range(0, data.shape[1])):
+        annot = str(data_annot[i, j]).split(',')
+        if len(annot) == 1:
+            text = ax.text(j, i, '0',
+                ha='center', va='center', color='black', size=10)
+        # 3 cases: two non-zero values, one non-zero value or two zero values
+        else:
+            if '0' in annot[0]:
+                if '0' in annot[1]:
+                    text = ax.text(j, i, '0', ha='center', va='center', color='black', size=10)
                 else:
-                    if '0' in annot[1]:
-                        text = ax.text(j, i, annot[0], ha="center", va="center", color=color(annot[0]), size=10)
-                    else:
-                        text = ax.text(j, i-0.18, annot[0], ha="center", va="center", color=color(annot[0]), size=10)
-                        text = ax.text(j, i+0.18, annot[1], ha="center", va="center", color=color(annot[1]), size=10)
+                    text = ax.text(j, i, annot[1], ha='center', va='center', color=color(annot[1]), size=10)
+            else:
+                if '0' in annot[1]:
+                    text = ax.text(j, i, annot[0], ha='center', va='center', color=color(annot[0]), size=10)
+                else:
+                    text = ax.text(j, i-0.18, annot[0], ha='center', va='center', color=color(annot[0]), size=10)
+                    text = ax.text(j, i+0.18, annot[1], ha='center', va='center', color=color(annot[1]), size=10)
 
     if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
     plt.savefig(path_join([PATH_FIGURES, 'heatmap_anomalies', T, N_MIN, N_DAYS, PERIOD], 'png'), dpi=600, bbox_inches='tight')
@@ -257,5 +255,5 @@ def main(argv):
     # heatmap_anomalies()
     return 0
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main(sys.argv)

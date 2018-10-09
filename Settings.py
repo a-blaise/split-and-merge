@@ -1,19 +1,19 @@
-#!/usr/bin/env python3
-
 import warnings
 import numpy as np
 import os
 
 warnings.filterwarnings("ignore")
 
-N_BATCH = 10 ** 6
+N_BATCH = 10 ** 3
 N_DAYS = 10
 N_MIN = 20
 T = 3.5
 
-THRESHOLD_ANO = 14
+THRESHOLD_ANO = 10
 
-PERIOD = 2018 # or 2016
+BINS_SIZE = 10
+
+PERIOD = 2016 # or 2016
 
 if PERIOD == 2016:
 	dates = ['0331', '0407', '0414', '0421', '0428', '0505', '0512', '0519', '0526', '0602', '0609', '0616', '0622', '0630', 
@@ -22,7 +22,7 @@ elif PERIOD == 2018:
 	dates = ['1026', '1102', '1109', '1116', '1123', '1130', '1207', '1214', '1221', '1228', '0104', '0111', '0118', '0125', '0201',
 		'0208', '0215', '0222', '0301', '0308', '0315', '0322', '0329', '0405', '0412', '0419', '0426', '0503', '0510', '0517', '0524', '0531']
 
-AGGs = [True, False]
+METHODS = ['aggregated', 'separated']
 
 ROOT_PATH = os.getcwd() + '/' # current directory
 

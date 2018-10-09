@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-
 import matplotlib.pyplot as plt
-import Settings
+from Settings import *
 
 class Feature:
     def __init__(self, att):
@@ -11,15 +9,14 @@ class Feature:
         self.zscores = {}
         self.mzscores = {}
         self.to_write = ''
+        self.mse = []
+        self.ports = []
 
     def reset_object(self):
         del self.time_vect[:]
         self.sub_time_vect.clear()
-        self.zscores.clear()
-        self.mzscores.clear()
-        for i in range(Settings.N_DAYS, len(Settings.dates)):
-            self.zscores[Settings.dates[i]] = ''
-            self.mzscores[Settings.dates[i]] = ''
+        self.zscores = dict.fromkeys(dates[N_DAYS:], '')
+        self.mzscores = dict.fromkeys(dates[N_DAYS:], '')
 
 class Figure(Feature):
     def __init__(self, att, leg):
