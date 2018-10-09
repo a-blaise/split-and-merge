@@ -24,6 +24,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from Settings import *
 from Features import Feature, Figure, list_features, list_figures
+from full_detection import path_join
 
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
@@ -35,11 +36,11 @@ def plot_time_series(original_subnets):
 
     for AGG in AGGs:
         if AGG:
-            prefix = '_agg'
+            prefix = 'agg'
         else:
-            prefix = '_separated'
+            prefix = 'separated'
 
-        values = pd.read_csv(PATH_PACKETS + 'packets_subnets' + prefix + '_' + str(PERIOD) + '.csv', dtype={'date': int, 'port': int, 
+        values = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets', prefix, PERIOD], 'csv'), dtype={'date': int, 'port': int, 
             'nb_packets': int, 'nb_src': int, 'nb_dst':int, 'div_index_src': float, 'div_index_dst': float, 'SYN': float, 
             'mean_size': float, 'std_size': float})
         values = values[values.nb_packets > N_MIN]
@@ -125,11 +126,11 @@ def get_frequency_anomalies():
     date = '0804'
     list_features.append(Feature('total'))
     for AGG in AGGs:
-        prefix = '_separated'
+        prefix = 'separated'
         if AGG:
-            prefix = '_agg'
+            prefix = 'agg'
         for feat in list_features:
-            ports = pd.read_csv(PATH_EVAL + 'eval_' + feat.attribute + '_' + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) + '.csv', sep = ';')
+            ports = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, prefix, PERIOD, T, N_MIN], 'csv'), sep = ';')
             ports = ports[date]
             result = ports.value_counts(dropna=False).to_dict()
             result = {}
@@ -147,7 +148,7 @@ def get_frequency_anomalies():
                 print(nb, round(sum(list(od.values())[i:]), 2))
 
 def compute_mse_feature(original_subnets):
-    value = pd.read_csv(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', dtype = {'nb_packets': int})
+    value = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'), dtype = {'nb_packets': int})
     value = value[value.nb_packets > N_MIN]
 
     for subnet in original_subnets:
@@ -166,22 +167,19 @@ def compute_mse_feature(original_subnets):
             for feat in list_features:
                 vector = [feat.time_vect[i] for i in range(N_DAYS, 2 * N_DAYS) if math.isnan(feat.time_vect[i]) == False]
                 if len(vector) > 3:
-                    if p != 3128 and p != 2323 and p != 23:
-                        mu = np.nanmean(vector)
-                        sigma = np.nanstd(vector)
-                        count, bins = np.histogram(vector, BINS_SIZE, density=1)
-                        regression = [1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- (b - mu)**2 / (2 * sigma**2)) for b in bins]
-                        # fig, ax = plt.subplots()
-                        # ax.set_title('port ' + str(p) + ' feature ' + feat.attribute)
-                        # ax.bar(bins[:-1] + np.diff(bins) / 2, count, np.diff(bins))
-                        # ax.plot(bins, regression, linewidth=2, color='r')
-                        # if sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE > 100:
-                        #     ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE))
-                        error = sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE
-                        if str(error) != 'nan':
-                            feat.mse.append(error)
-                            if error > 5:
-                                print('port', p, 'feature', feat.attribute, 'error', error, 'vector', vector, 'subnet', subnet)
+                    mu = np.nanmean(vector)
+                    sigma = np.nanstd(vector)
+                    count, bins = np.histogram(vector, BINS_SIZE, density=1)
+                    regression = [1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- (b - mu)**2 / (2 * sigma**2)) for b in bins]
+                    # fig, ax = plt.subplots()
+                    # ax.set_title('port ' + str(p) + ' feature ' + feat.attribute)
+                    # ax.bar(bins[:-1] + np.diff(bins) / 2, count, np.diff(bins))
+                    # ax.plot(bins, regression, linewidth=2, color='r')
+                    # if sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE > 100:
+                    #     ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE))
+                    error = sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE
+                    if str(error) != 'nan':
+                        feat.mse.append(error)
     for feat in list_features:
         if len(feat.mse) > 0:
             x, y = ecdf(feat.mse)
@@ -189,7 +187,7 @@ def compute_mse_feature(original_subnets):
             ax1.plot(x, y)
             ax1.set_title('feature ' + feat.attribute)
             ax1.set_xlim(0, 1)
-            fig1.savefig(PATH_FIGURES + 'ecdf_' + feat.attribute + '_' + str(N_MIN) + '_upto1.png', dpi=300)
+            fig1.savefig(path_join([PATH_FIGURES, 'ecdf', feat.attribute, 'N_MIN', 'upto1'], 'png'), dpi=300)
         else:
             print(feat.attribute, '0 in vect')
 
@@ -210,11 +208,11 @@ def gauss(bin, mu, sigma):
 
 def main(argv):
     subnets = {}
-    sub_df = pd.read_csv(PATH_SUBNETS + 'subnets_' + str(PERIOD) + '.csv', dtype={'date': str})
+    sub_df = pd.read_csv(path_join([PATH_SUBNETS, 'subnets, PERIOD'], 'csv'), dtype={'date': str})
     original_subnets = sub_df.columns[1:].tolist()
 
     if PERIOD == 2018:
-        sub_df = sub_df.append(pd.read_csv(PATH_SUBNETS + 'subnets_2017.csv', dtype={'date': str})) # add last months of 2017 if 2018 period
+        sub_df = sub_df.append(pd.read_csv(path_join([PATH_SUBNETS, 'subnets_2017'], '.csv'), dtype={'date': str})) # add last months of 2017 if 2018 period
 
     for subnet in original_subnets:
         subnets[subnet] = {}
