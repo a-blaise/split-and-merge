@@ -61,8 +61,8 @@ def compute_subnets(original_subnets, sub_df):
         os.mkdir(PATH_PACKETS)
 
     # Create one file for the whole dataset (subnets aggregated) and one for subnets not aggregated (separated)
-    files = [open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '.csv', 'a'),
-        open(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '.csv', 'a')]
+    files = [open(PATH_PACKETS + 'packets_subnets_agg_' + str(PERIOD) + '_10_5.csv', 'a'),
+        open(PATH_PACKETS + 'packets_subnets_separated_' + str(PERIOD) + '_10_5.csv', 'a')]
 
     for file in files:
         file.write('date,')
@@ -163,15 +163,13 @@ def evaluation_ports(original_subnets):
     Generate an evaluation file named eval_*feature* with the results.
     """
     for AGG in AGGs:
-        for feat in list_features:
-            feat.reset_object()
+        subnets = original_subnets
+        prefix = '_separated'
         if AGG:
             prefix = '_agg'
             subnets = ['all']
-        else:            
-            prefix = '_separated'
-            subnets = original_subnets
-        value = pd.read_csv(PATH_PACKETS + 'packets_subnets' + prefix + '_' + str(PERIOD) + '.csv', dtype = {'nb_packets': int})
+
+        value = pd.read_csv(PATH_PACKETS + 'packets_subnets' + prefix + '_' + str(PERIOD) + '_10_5.csv', dtype = {'nb_packets': int})
         value = value[value.nb_packets > N_MIN]
 
         for feat in list_features:
@@ -179,13 +177,12 @@ def evaluation_ports(original_subnets):
 
         if not os.path.exists(PATH_EVAL):
             os.mkdir(PATH_EVAL)
-        with open(PATH_EVAL + 'eval_total' + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) + '_' + str(N_DAYS) + '_test.csv', 'a') as file:
+        with open(PATH_EVAL + 'eval_total' + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) + '_' + str(N_DAYS) + '_10_5.csv', 'a') as file:
             file.write('port;' + ';'.join(dates[N_DAYS:]) + '\n')
 
         ports = set(value.port.tolist())
         string_total = ''
         for p in list(ports):
-            string_total = string_total + str(p) + ';'
             mzscores_total = {}
             for feat in list_features:
                 feat.reset_object()
@@ -217,20 +214,18 @@ def evaluation_ports(original_subnets):
                                     feat.mzscores[dates[i]] += '+' + subnet + ','
                                 elif mzscore < - T:
                                     feat.mzscores[dates[i]] += '-' + subnet + ','
-                    if subnet != 'all':
-                        if feat.attribute != 'nb_packets':
-                            mzscores_total[dates[i]] += feat.mzscores[dates[i]]
+                    if subnet != 'all' and feat.attribute != 'nb_packets':
+                        mzscores_total[dates[i]] += feat.mzscores[dates[i]]
                 feat.to_write = feat.to_write + ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n'
-            string_total = string_total + ';'.join([el[:-1] for el in mzscores_total.values()]) + '\n'
+            string_total = string_total + str(p) + ';'.join([el[:-1] for el in mzscores_total.values()]) + '\n'
 
-        # Generate one evaluation file per feature.
         for feat in list_features:
-            with open(PATH_EVAL + 'eval_' + feat.attribute + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) +'_' + str(N_DAYS) + '_test.csv', 'a') as file_feature:
+            with open(PATH_EVAL + 'eval_' + feat.attribute + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) +'_' + str(N_DAYS) + '_10_5.csv', 'a') as file_feature:
                 file_feature.write(feat.to_write)
                 file_feature.close()
 
         # eval_total contains the total of the results for all features.
-        with open(PATH_EVAL + 'eval_total' + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) + '_' + str(N_DAYS) + '_test.csv', 'a') as file:
+        with open(PATH_EVAL + 'eval_total' + prefix + '_' + str(PERIOD) + '_' + str(T) + '_' + str(N_MIN) + '_' + str(N_DAYS) + '_10_5.csv', 'a') as file:
             file.write(string_total)
             file.close()
 
@@ -264,30 +259,32 @@ def compute_mse_feature(original_subnets):
         for p in list(ports):
             for feat in list_features:
                 feat.reset_object()
-            for date in dates:
+            for date in dates[:2 * N_DAYS]:
                 val = rep[(rep.date == int(date)) & (rep.port == p)]
                 for feat in list_features:
                     if val.empty == False:
                         feat.time_vect.append(val[feat.attribute].item())
                     else:
                         feat.time_vect.append(np.nan)
-            vector = [feat.time_vect[i] for i in range(N_DAYS, len(dates)) if math.isnan(feat.time_vect[i]) == False]
-            if len(vector) > 1:
-                if p != 3128 and p != 2323:
-                    mu = np.nanmean(vector)
-                    sigma = np.nanstd(vector)
-                    count, bins = np.histogram(vector, BINS_SIZE, density=1)
-                    regression = [1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- (b - mu)**2 / (2 * sigma**2)) for b in bins]
-                    # fig, ax = plt.subplots()
-                    # ax.set_title('port ' + str(p) + ' feature ' + feat.attribute)
-                    # ax.bar(bins[:-1] + np.diff(bins) / 2, count, np.diff(bins))
-                    # ax.plot(bins, regression, linewidth=2, color='r')
-                    # if sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE > 100:
-                    #     ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE))
-                    error = sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE
-                    if str(error) != 'nan':
-                        feat.mse.append(error)
-
+            for feat in list_features:
+                vector = [feat.time_vect[i] for i in range(N_DAYS, 2 * N_DAYS) if math.isnan(feat.time_vect[i]) == False]
+                if len(vector) > 3:
+                    if p != 3128 and p != 2323 and p != 23:
+                        mu = np.nanmean(vector)
+                        sigma = np.nanstd(vector)
+                        count, bins = np.histogram(vector, BINS_SIZE, density=1)
+                        regression = [1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- (b - mu)**2 / (2 * sigma**2)) for b in bins]
+                        # fig, ax = plt.subplots()
+                        # ax.set_title('port ' + str(p) + ' feature ' + feat.attribute)
+                        # ax.bar(bins[:-1] + np.diff(bins) / 2, count, np.diff(bins))
+                        # ax.plot(bins, regression, linewidth=2, color='r')
+                        # if sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE > 100:
+                        #     ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE))
+                        error = sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE
+                        if str(error) != 'nan':
+                            feat.mse.append(error)
+                            if error > 5:
+                                print('port', p, 'feature', feat.attribute, 'error', error, 'vector', vector, 'subnet', subnet)
     for feat in list_features:
         if len(feat.mse) > 0:
             x, y = ecdf(feat.mse)
@@ -295,15 +292,14 @@ def compute_mse_feature(original_subnets):
             ax1.plot(x, y)
             ax1.set_title('feature ' + feat.attribute)
             ax1.set_xlim(0, 1)
-            fig1.savefig(PATH_FIGURES + 'ecdf_' + feat.attribute + '.png', dpi=300)
+            fig1.savefig(PATH_FIGURES + 'ecdf_' + feat.attribute + '_' + str(N_MIN) + '_upto1.png', dpi=300)
         else:
             print(feat.attribute, '0 in vect')
 
 def ecdf(data):
     raw_data = np.array(data)
     cdfx = np.sort(np.unique(raw_data))
-    x_values = np.linspace(start=min(cdfx),
-        stop=max(cdfx),num=len(cdfx))
+    x_values = np.linspace(start=min(cdfx), stop=max(cdfx),num=len(cdfx))
     
     size_data = raw_data.size
     y_values = []
@@ -330,7 +326,7 @@ def main(argv):
             rep = sub_df[sub_df.date == date][subnet].item()
             subnets[subnet][str(rep) + '-' + date] = pd.DataFrame()
 
-    # compute_subnets(subnets, original_subnets, sub_df)
+    # compute_subnets(original_subnets, sub_df)
     # evaluation_ports(original_subnets)
     # eval_scores()
     compute_mse_feature(original_subnets)
