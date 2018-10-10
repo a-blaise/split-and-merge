@@ -35,3 +35,12 @@ Then you'll be able to run the *full_detection.py* file. This computes features 
 
 ## Draw heatmap to show results
 The *heatmap.py* file enables to print the results. The first function shows a panorama of the occurrences of the intensity of anomalies for the given period, while the second function shows the main anomalies precisely, providing the evolution of each feature to better characterize the anomalies.
+
+
+## Plot additional things
+
+Finally, the *additional_plots.py* file enables:
+1. To plot feature time series and modified Z-score evolution for each port.
+2. To pick a date and observe the frequency of anomalies for all features this given day.
+3. To compute mean square errors for each feature, compared to a normal distribution.
+4. To evaluate the impact of the *N_DAYS* variable, by comparing the anomalies obtained using different values.
