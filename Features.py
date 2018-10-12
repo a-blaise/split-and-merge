@@ -22,13 +22,15 @@ class Figure(Feature):
     def __init__(self, att, leg):
         Feature.__init__(self, att)
         self.legend = leg
+
+    def reset_object(self):
+        Feature.reset_object(self)
+
+    def init_figs(self):
         self.fig, self.ax = plt.subplots()
         self.fig_a, self.ax_a = plt.subplots()
         self.fig_z, self.ax_z = plt.subplots()
         self.fig_z_a, self.ax_z_a = plt.subplots()
-
-    def reset_object(self):
-        Feature.reset_object(self)
 
 attributes_legends = dict(nb_packets='Number of packets', src_div_index='Source diversity index', dst_div_index='Destination diversity index', 
     port_div_index='Port diversity index', mean_size='Mean size', std_size='Std size', SYN='Percentage of SYN packets')

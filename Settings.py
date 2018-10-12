@@ -4,7 +4,7 @@ import os
 
 warnings.filterwarnings("ignore")
 
-N_BATCH = 10 ** 3
+N_BATCH = 10 ** 6
 N_DAYS = 10
 N_MIN = 20
 T = 3.5

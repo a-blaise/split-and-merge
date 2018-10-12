@@ -224,7 +224,7 @@ def main(argv):
         new_subnet = sub_df[sub_df.date == date][subnet].item()
         subnets[subnet][str(new_subnet) + '-' + date] = pd.DataFrame()
 
-    compute_subnets(original_subnets, sub_df)
+    # compute_subnets(original_subnets, sub_df)
     # evaluation_ports(original_subnets)
     # eval_scores()
     # compute_mse_feature(original_subnets)
