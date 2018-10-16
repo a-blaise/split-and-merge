@@ -169,17 +169,15 @@ def compute_mse_feature(original_subnets):
                 feat.reset_object()
         break
     for feat in list_features:
-        if len(feat.mse) > 0:
-            print(feat.attribute, np.nanmedian(feat.mse), len(feat.mse))
-            x, y = ecdf(feat.mse)
-            fig1, ax1 = plt.subplots()
-            ax1.plot(x, y)
-            ax1.set_title('feature ' + feat.attribute)
-            ax1.set_xlim(0, 1)
-            fig1.savefig(path_join([PATH_FIGURES, 'ecdf', feat.attribute, N_MIN, 'upto1'], 'png'), dpi=300)
-        else:
-            print(feat.attribute, '0 in vect')
-    # plt.show()
+        print(feat.attribute, np.nanmedian(feat.mse), len(feat.mse))
+        x, y = ecdf(feat.mse)
+        fig1, ax1 = plt.subplots()
+        ax1.plot(x, y)
+        ax1.set_title('Feature ' + feat.attribute)
+        ax1.set_xlim(0, 1)
+        ax1.set_xlabel('Mean Squared Error')
+        ax1.set_ylabel('Probability to have this MSE')
+        fig1.savefig(path_join([PATH_FIGURES, 'ecdf', feat.attribute, N_MIN, 'upto1'], 'png'), dpi=300)
 
 def ecdf(data):
     raw_data = np.array(data)
@@ -192,155 +190,6 @@ def ecdf(data):
         temp = raw_data[raw_data <= i] # all the values in raw data less than the ith value in x_values
         y_values.append(temp.size / size_data) # fraction of that value with respect to the size of the x_values
     return x_values, y_values
-
-def anomalies_ndays(subnets):
-    # regarder pourquoi 15 et 20 jours: exactement les mêmes anomalies?
-    packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'), dtype = {'nb_packets': int})
-    packets = packets[packets.nb_packets > N_MIN]
-    ports = packets.port.unique()
-
-    # Compute anomalies by varying the number of days in the model
-    # nb_days = np.arange(start=5, stop=25, step=5) # 5, 10, 15, 20
-    nb_days = [3, 5, 8, 10, 13, 15, 18, 20, 23]
-    files = {}
-    for nb_day in nb_days:
-        files[nb_day] = open(path_join([PATH_EVAL, 'ano_days', nb_day, 'full'], 'txt'), 'a')
-    ano_per_day = dict.fromkeys(nb_days, {})
-
-    LEN_PERIOD = 10
-    # count anomalies by each port / date
-    for p in ports:
-        packets_port = packets[packets.port == p]
-        tmp_anomalies = {} # key = port | date | nb_day ; value = int (nb occurrences)
-        for feat in list_features:
-            feat.reset_object()
-            for subnet in subnets:
-                del feat.time_vect[:]
-                packets_sub = packets_port[packets_port.key == subnet]
-                for i, date in enumerate(dates):
-                    rep = packets_sub[packets_sub.date == int(date)]
-                    if not rep.empty:
-                        feat.time_vect.append(rep[feat.attribute].item())
-                    else:
-                        feat.time_vect.append(np.nan)
-
-                    if i > len(dates) - LEN_PERIOD:
-                        for nb_day in nb_days:
-                            median = np.nanmedian(feat.time_vect[i - nb_day:i])
-                            median_absolute_deviation = np.nanmedian([np.abs(y - median) for y in feat.time_vect[i - nb_day:i]])
-                            mzscore = 0.6745 * (feat.time_vect[i] - median) / median_absolute_deviation
-                            if np.abs(mzscore) > T:
-                                id_anomaly = '|'.join([str(p), date, str(nb_day)])
-                                if id_anomaly in tmp_anomalies:
-                                    tmp_anomalies[id_anomaly] += 1
-                                else:
-                                    tmp_anomalies[id_anomaly] = 1
-        for id_anomaly, nb_occur in tmp_anomalies.items():
-            if nb_occur > THRESHOLD_ANO:
-                n_day = int(id_anomaly.split('|')[-1])
-                new_id = '|'.join(id_anomaly.split('|')[:2])
-                ano_per_day[n_day][new_id] = nb_occur
-                files[n_day].write(new_id + ',')
-
-def comparison_ndays():
-    files = {}
-    # nb_days = np.arange(start=5, stop=25, step=5)
-    nb_days = [3, 8, 13, 18, 23]
-    ano_per_day = dict.fromkeys(nb_days, {})
-
-    for nb_day in nb_days:
-        files[nb_day] = open(path_join([PATH_EVAL, 'ano_days', nb_day], 'txt'), 'r')
-        l = files[nb_day].read()
-        ano_per_day[nb_day] = l.split(',')
-
-    elements_under = {} # key: nb_day (except 10), value: elements in baseline and not here
-    elements_over = {} # same with elements in + compared to baseline
-
-    # Compare anomalies seen for each day with the baseline
-    baseline = 10
-    baseline_anomalies = ano_per_day[baseline] # list of anomalies
-    for nb_day, anomalies in ano_per_day.items():
-        if nb_day != baseline:
-            elements_over[nb_day] = []
-            elements_under[nb_day] = []
-            for item in anomalies:
-                if item not in baseline_anomalies:
-                    elements_over[nb_day].append(item)
-            for item in baseline_anomalies:
-                if item not in anomalies:
-                    elements_under[nb_day].append(item)
-            print('nb_day', nb_day)
-            print(elements_over[nb_day])
-            print(elements_under[nb_day])
-
-    list_over = []
-    list_under = []
-
-    for nb_day in nb_days:
-        if nb_day in elements_over:
-            list_over.append(len(elements_over[nb_day]))
-        else:
-            list_over.append(0)
-        if nb_day in elements_under:
-            list_under.append(- len(elements_under[nb_day]))
-        else:
-            list_under.append(0)
-        print(nb_day, list_under, list_over)
-
-    fig, ax = plt.subplots()
-    ax.bar(nb_days, list_over)
-    ax.bar(nb_days, list_under)
-    ax.set_xticks(nb_days)
-    ax.set_xlabel('N_DAYS')
-    ax.set_ylabel('Number of anomalies in +/- compared to baseline')
-    plt.show()
-    fig.savefig(path_join([PATH_FIGURES, 'comparison_ndays', THRESHOLD_ANO], 'png'), dpi=300)
-
-def anomalies_nmins(subnets):
-    nb_mins = [20, 35, 50, 65, 80, 100]
-
-    files = {}
-    for nb_min in nb_mins:
-        files[nb_min] = open(path_join([PATH_EVAL, 'ano_mins', nb_min], 'txt'), 'a')
-    ano_per_day = dict.fromkeys(nb_mins, {})
-
-    packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'), dtype = {'nb_packets': int})
-    for nb_min in nb_mins:
-        packets = packets[packets.nb_packets > nb_min]
-        ports = packets.port.unique()
-
-        # count anomalies by each port / date
-        for p in ports:
-            packets_port = packets[packets.port == p]
-            tmp_anomalies = {} # key = port | date | nb_min ; value = int (nb occurrences)
-            for feat in list_features:
-                feat.reset_object()
-                for subnet in subnets:
-                    del feat.time_vect[:]
-                    packets_sub = packets_port[packets_port.key == subnet]
-                    for i, date in enumerate(dates):
-                        rep = packets_sub[packets_sub.date == int(date)]
-                        if not rep.empty:
-                            feat.time_vect.append(rep[feat.attribute].item())
-                        else:
-                            feat.time_vect.append(np.nan)
-
-                        if i > N_DAYS:
-                            median = np.nanmedian(feat.time_vect[i - N_DAYS:i])
-                            median_absolute_deviation = np.nanmedian([np.abs(y - median) for y in feat.time_vect[i - N_DAYS:i]])
-                            mzscore = 0.6745 * (feat.time_vect[i] - median) / median_absolute_deviation
-                            if np.abs(mzscore) > T:
-                                id_anomaly = '|'.join([str(p), date, str(nb_min)])
-                                if id_anomaly in tmp_anomalies:
-                                    tmp_anomalies[id_anomaly] += 1
-                                else:
-                                    tmp_anomalies[id_anomaly] = 1
-            for id_anomaly, nb_occur in tmp_anomalies.items():
-                if nb_occur > THRESHOLD_ANO:
-                    n_min = int(id_anomaly.split('|')[-1])
-                    new_id = '|'.join(id_anomaly.split('|')[:2])
-                    ano_per_day[n_min][new_id] = nb_occur
-                    files[n_min].write(new_id + ',')
 
 def main(argv):
     sub_df = pd.read_csv(path_join([PATH_SUBNETS, 'subnets', PERIOD], 'csv'), dtype={'date': str})
@@ -356,10 +205,7 @@ def main(argv):
 
     # plot_time_series(original_subnets)
     # get_frequency_anomalies()
-    # compute_mse_feature(original_subnets)
-    anomalies_ndays(subnets)
-    # comparison_ndays()
-    # anomalies_nmins(subnets)
+    compute_mse_feature(original_subnets)
     return 0
 
 if __name__ == '__main__':
