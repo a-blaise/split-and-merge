@@ -19,11 +19,18 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.stats import spearmanr
 
 from Settings import *
 from Features import Feature, Figure, list_features, list_figures
 from full_detection import path_join, pre_computation
 from sklearn.metrics import mean_squared_error
+
+def sign_to_score(row):
+    if type(row) is str:
+        nbs = row.split(',')
+        return int(nbs[0]) + int(nbs[1][1:])
+    return 0
 
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
@@ -181,15 +188,44 @@ def ecdf(data):
         y_values.append(temp.size / size_data) # fraction of that value with respect to the size of the x_values
     return x_values, y_values
 
-# def features_correlation():
+def correlation_features():
+    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))
+    list_anomalies, list_annotations, indexes = ([] for i in range(3))
 
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
+    ports = ports_annot.applymap(sign_to_score)
+    ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
+
+    for index, row in ports.iterrows():
+        for i, date in enumerate(dates[N_DAYS:]):
+            if row[i] > THRESHOLD_ANO:
+                annotations = []
+                indexes.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
+                for feat in list_features:
+                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
+                    rep = evaluation[evaluation.port == index].loc[:, date]
+                    annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)] if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                list_annotations.append(annotations)
+
+    heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-'] for feat in list_features], index = indexes)
+    
+    correl = ['mean_size', 'std_size']
+    for i in list_features:
+        for j in list_features:
+            if i != j:
+                for s in ['+', '-']:
+                    for t in ['+', '-']:
+                        rho, p_value = spearmanr(heatmap[s + i.attribute], heatmap[t + j.attribute])
+                        if rho > 0.5:
+                            print(s + i.attribute, t + j.attribute, rho)
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
     # get_frequency_anomalies()
-    compute_mse_feature(original_subnets)
+    # compute_mse_feature(original_subnets)
+    correlation_features()
     return 0
 
 if __name__ == '__main__':
