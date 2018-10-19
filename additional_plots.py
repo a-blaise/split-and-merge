@@ -18,12 +18,11 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from collections import OrderedDict
 from matplotlib.backends.backend_pdf import PdfPages
 
 from Settings import *
 from Features import Feature, Figure, list_features, list_figures
-from full_detection import path_join
+from full_detection import path_join, pre_computation
 from sklearn.metrics import mean_squared_error
 
 def plot_time_series(original_subnets):
@@ -38,7 +37,7 @@ def plot_time_series(original_subnets):
         packets = packets[packets.nb_packets > N_MIN]
         ports = packets.port.unique()
 
-        # Plot only the results for the 10 first ports
+        # Plot only the results for the first ten ports
         for p in ports[:10]:
             packets_port = packets[packets.port == p]
             for fig in list_figures:
@@ -110,35 +109,18 @@ def plot_time_series(original_subnets):
                 fig_totake.savefig(pdf, format = 'pdf', dpi=600, bbox_extra_artists=(lgd,), bbox_inches='tight')
     pdf.close()
 
-def get_frequency_anomalies():
-    """Pick a date and observe the frequency of anomalies for all features this given day."""
-    date = '0804'
-    list_features.append(Feature('total'))
-    for method, feat in zip(METHODS, list_features):
-        ports = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN], 'csv'), sep = ';')
-        result = ports[date].value_counts(dropna=False).to_dict()
-        for k, v in result.items():
-            if str(k) != 'nan':
-                nb_el = len(k.split(','))
-                if nb_el not in result_agg_2.keys():
-                    result[nb_el] = v
-                else:
-                    result[nb_el] += v
-            else:
-                result[0] = v
-        od = OrderedDict(sorted(result.items()))
-        for i, nb in enumerate(od.keys()):
-            print(nb, round(sum(list(od.values())[i:]), 2))
+def gauss(b, mu, sigma): return 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- ((b - mu) / (2 * sigma))**2)
 
 def compute_mse_feature(original_subnets):
     packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'), dtype = {'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
-    for subnet in original_subnets:
+
+    for subnet in original_subnets[:2]:
         packets_subnet = packets[packets.key == subnet]
         ports = packets_subnet.port.unique()
-        for p in ports:
+        for p in ports[:5]:
             packets_port = packets_subnet[packets_subnet.port == p]
-            for date in dates[:2 * N_DAYS]:
+            for date in dates[:N_DAYS]:
                 rep = packets_port[packets_port.date == int(date)]
                 for feat in list_features:
                     if not rep.empty:
@@ -146,7 +128,7 @@ def compute_mse_feature(original_subnets):
                     else:
                         feat.time_vect.append(np.nan)
             for feat in list_features:
-                vector = [feat.time_vect[i] for i in range(N_DAYS, 2 * N_DAYS) if not np.isnan(feat.time_vect[i])]
+                vector = [feat.time_vect[i] for i in range(N_DAYS) if not np.isnan(feat.time_vect[i])]
                 mu = np.nanmean(vector)
                 sigma = np.nanstd(vector)
                 n_vector = [(v - mu) / sigma for v in vector]
@@ -154,35 +136,43 @@ def compute_mse_feature(original_subnets):
                     mu = 0
                     sigma = 1
                     count, bins = np.histogram(n_vector, BINS_SIZE, density=1)
-                    regression = [1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- (b - mu)**2 / (2 * sigma**2)) for b in bins]
-                    error = mean_squared_error(count, regression[:-1])
-                    # fig, ax = plt.subplots()
-                    # ax.set_title('port ' + str(p) + ' feature ' + feat.attribute)
-                    # ax.bar(bins[:-1] + np.diff(bins) / 2, count, np.diff(bins))
-                    # ax.plot(bins, regression, linewidth=2, color='r')
+                    regression = [] # value of Gaussian function in the middle of the interval
+                    for i, b in enumerate(bins):
+                        value = gauss(b, mu, sigma)
+                        if i != 0:
+                            regression.append(temp + value)
+                        temp = value
+                    error = mean_squared_error(count, regression)
 
-                    # error = sum(np.subtract(regression[:-1], count)**2) / BINS_SIZE * sigma
-                    # if error > 10:
-                    #     ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(error))
+                    fig, ax = plt.subplots()
+                    ax.set_title('port ' + str(p) + ' feature ' + feat.attribute)
+                    ax.bar(bins[:-1] + np.diff(bins) / 2, count)
+                    ax.plot(bins[:-1] + np.diff(bins) / 2, regression, linewidth=2, color='r')
+                    if error > 10:
+                        ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(error))
                     if not np.isnan(error):
                         feat.mse.append(error)
+                    print(p, feat.attribute, bins, count, regression, error)
+
                 feat.reset_object()
-        break
-    for feat in list_features:
-        print(feat.attribute, np.nanmedian(feat.mse), len(feat.mse))
-        x, y = ecdf(feat.mse)
-        fig1, ax1 = plt.subplots()
-        ax1.plot(x, y)
-        ax1.set_title('Feature ' + feat.attribute)
-        ax1.set_xlim(0, 1)
-        ax1.set_xlabel('Mean Squared Error')
-        ax1.set_ylabel('Probability to have this MSE')
-        fig1.savefig(path_join([PATH_FIGURES, 'ecdf', feat.attribute, N_MIN, 'upto1'], 'png'), dpi=300)
+
+    # fig_mse, ax_mse = plt.subplots()
+    # for feat in list_features:
+    #     x, y = ecdf(feat.mse)
+    #     ax_mse.plot(x, y, label=feat.attribute + ' ' + str(np.round(np.nanmedian(feat.mse), 2)))
+
+    # ax_mse.set_title('CDF MSE per feature ')
+    # ax_mse.set_xlabel('Mean Squared Error')
+    # ax_mse.set_ylabel('Probability to have this MSE')
+    # legend = ax_mse.legend(loc='lower right', shadow=True)
+    # ax_mse.grid(True)
+
+    # fig_mse.savefig(path_join([PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited'], 'png'), dpi=300)
 
 def ecdf(data):
     raw_data = np.array(data)
     cdfx = np.sort(np.unique(raw_data))
-    x_values = np.linspace(start=min(cdfx), stop=max(cdfx),num=len(cdfx))
+    x_values = np.linspace(start=min(cdfx), stop=max(cdfx), num=len(cdfx))
     
     size_data = raw_data.size
     y_values = []
@@ -191,17 +181,11 @@ def ecdf(data):
         y_values.append(temp.size / size_data) # fraction of that value with respect to the size of the x_values
     return x_values, y_values
 
+# def features_correlation():
+
+
 def main(argv):
-    sub_df = pd.read_csv(path_join([PATH_SUBNETS, 'subnets', PERIOD], 'csv'), dtype={'date': str})
-    original_subnets = sub_df.columns[1:].tolist()
-
-    if PERIOD == 2018:
-        sub_df = sub_df.append(pd.read_csv(path_join([PATH_SUBNETS, 'subnets_2017'], 'csv'), dtype={'date': str})) # add last months of 2017 if 2018 period
-
-    subnets = dict.fromkeys(original_subnets, {})
-    for subnet, date in zip(original_subnets, sub_df['date']):
-        new_subnet = sub_df[sub_df.date == date][subnet].item()
-        subnets[subnet][str(new_subnet) + '-' + date] = pd.DataFrame()
+    original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
     # get_frequency_anomalies()

@@ -18,12 +18,27 @@ import pandas as pd
 import ipaddress
 import numpy as np
 import os
+
 from Settings import *
 from Features import Feature, list_features
 import matplotlib.pyplot as plt
 
 def path_join(parts, extension):
     return parts[0] + '_'.join(map(str, parts[1:])) + '.' + extension
+
+def pre_computation():
+    sub_df = pd.read_csv(path_join([PATH_SUBNETS, 'subnets', PERIOD], 'csv'), dtype={'date': str})
+    original_subnets = sub_df.columns[1:].tolist()
+
+    if PERIOD == 2018:
+        sub_df = sub_df.append(pd.read_csv(path_join([PATH_SUBNETS, 'subnets_2017'], 'csv'), dtype={'date': str})) # add last months of 2017 if 2018 period
+
+    subnets = dict.fromkeys(original_subnets, {})
+    for subnet, date in zip(original_subnets, sub_df['date']):
+        new_subnet = sub_df[sub_df.date == date][subnet].item()
+        subnets[subnet][str(new_subnet) + '-' + date] = pd.DataFrame()
+
+    return original_subnets, sub_df, subnets
 
 def check_orphans(row, daily_subnets):
     """Check which packets do not belong to any identified MAWI subnetwork (neither source IP nor destination IP)."""
@@ -40,7 +55,6 @@ def check_orphans(row, daily_subnets):
     if not found:
         print(row['IP_src'], row['IP_dst'], row['port_src'], row['port_dst'])
 
-# dont forget to rollback keep_Wide: this version doesnt work yet
 def keep_wide(IP_dst, original_subnets, daily_subnets):
     """Associate the destination IP address with its desanonymized subnetwork."""
     for i, key in enumerate(daily_subnets):
@@ -105,20 +119,17 @@ def compute_subnets(original_subnets, sub_df):
         else:
             file.write(','.join(elements))
 
-    types = {'IP_src': object, 'IP_dst': object, 'port_src': int, 'port_dst': int, 'SYN+ACK': int, 'RST+ACK': int, 'FIN+ACK': int,
-        'SYN': int, 'ACK': int, 'RST': int, 'size': int}
-
     for date in dates:
+        period = PERIOD
         if PERIOD == 2018 and int(date) > 1000: # 1001 = first of October. From October to December -> 2017
-            chunks = pd.read_csv(path_join([PATH_CSVS, 'data_2017' + str(date)], 'csv'), chunksize = N_BATCH, dtype = types)
-        else:
-            chunks = pd.read_csv(path_join([PATH_CSVS, 'data', str(PERIOD) + str(date)], 'csv'), chunksize = N_BATCH, dtype = types)
+            period = 2017
+        chunks = pd.read_csv(path_join([PATH_CSVS, 'data', str(period) + str(date)], 'csv'), chunksize = N_BATCH, dtype = {'IP_src': object, 'IP_dst': object,
+            'port_src': int, 'port_dst': int, 'SYN+ACK': int, 'RST+ACK': int, 'FIN+ACK': int, 'SYN': int, 'ACK': int, 'RST': int, 'size': int})
         
         # Find subnets of the day and put them on a list
         daily_subnets = sub_df[sub_df.date == date].iloc[0, 1:].tolist()
 
         for chunk in chunks:
-            # for both approaches: subnets aggregated and separated
             for method in METHODS:
                 if method == 'aggregated':
                     packets = chunk.copy()
@@ -144,9 +155,8 @@ def evaluation_ports(original_subnets):
         packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets', method, PERIOD], 'csv'), dtype = {'nb_packets': int})
         packets = packets[packets.nb_packets > N_MIN]
 
-        if method == 'aggregated':
-            subnets = ['all']
-        else:
+        subnets = ['all']
+        if method == 'separated':
             subnets = original_subnets
 
         for feat in list_features:
@@ -190,40 +200,25 @@ def evaluation_ports(original_subnets):
                                     feat.mzscores[date] += '-' + subnet + ','
                         if method != 'aggregated' and feat.attribute != 'nb_packets':
                             mzscores_total[date] += feat.mzscores[date]
-                feat.to_write = feat.to_write + ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n'
+                feat.to_write += ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n'
 
         # for feat in list_features:
         #     with open(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS], 'csv'), 'a') as file_feature:
         #         file_feature.write(feat.to_write)
         #         file_feature.close()
 
-def get_nb_alarms(x):
-    """Lambda function to get the number of anomalies given a list of anomalous subnets"""
-    string = str(x)
-    if string != 'nan':
-        return '+' + str(string.count('+')) + ',-' + str(string.count('-'))
-    return np.nan
-
 def eval_scores():
     """ In evaluation ports files: convert anomalous subnets to number of anomalous subnets (= number of anomalies)"""
     list_features.append(Feature('total'))
     for feat, method in zip(list_features, METHODS):
         ports = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS], 'csv'), sep=';', index_col=0)
+        # Lambda function to get the number of anomalies given a list of anomalous subnets
+        get_nb_alarms = lambda x: ','.join([sign + str(str(x).count(sign)) for sign in range('+', '-')]) if str(x) != 'nan' else np.nan
         ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
         ports.to_csv(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep=';')
 
 def main(argv):
-    sub_df = pd.read_csv(path_join([PATH_SUBNETS, 'subnets', PERIOD], 'csv'), dtype={'date': str})
-    original_subnets = sub_df.columns[1:].tolist()
-
-    if PERIOD == 2018:
-        sub_df = sub_df.append(pd.read_csv(path_join([PATH_SUBNETS, 'subnets_2017'], 'csv'), dtype={'date': str})) # add last months of 2017 if 2018 period
-
-    subnets = dict.fromkeys(original_subnets, {})
-    for subnet, date in zip(original_subnets, sub_df['date']):
-        new_subnet = sub_df[sub_df.date == date][subnet].item()
-        subnets[subnet][str(new_subnet) + '-' + date] = pd.DataFrame()
-
+    original_subnets, sub_df, subnets = pre_computation()
     # compute_subnets(original_subnets, sub_df)
     # evaluation_ports(original_subnets)
     # eval_scores()
