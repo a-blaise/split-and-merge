@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 
 from Settings import *
 from Features import Feature, Figure, list_features, list_figures
@@ -209,15 +209,15 @@ def correlation_features():
 
     heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-'] for feat in list_features], index = indexes)
     
-    correl = ['mean_size', 'std_size']
-    for i in list_features:
-        for j in list_features:
-            if i != j:
+    for ind_i, i in enumerate(list_features):
+        for ind_j, j in enumerate(list_features):
+            if ind_j > ind_i:
                 for s in ['+', '-']:
                     for t in ['+', '-']:
-                        rho, p_value = spearmanr(heatmap[s + i.attribute], heatmap[t + j.attribute])
-                        if rho > 0.5:
-                            print(s + i.attribute, t + j.attribute, rho)
+                        rho_s, p_s= spearmanr(heatmap[s + i.attribute], heatmap[t + j.attribute])
+                        rho_p, p_p = pearsonr(heatmap[s + i.attribute], heatmap[t + j.attribute])
+                        if rho_s > 0.5 or rho_p > 0.5:
+                            print(s + i.attribute, t + j.attribute, rho_s, rho_p)
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
