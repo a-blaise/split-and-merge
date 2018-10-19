@@ -28,10 +28,10 @@ from sklearn.metrics import mean_squared_error
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
     if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
-    pdf = PdfPages(path_join([PATH_FIGURES, 'time_series'], 'pdf'))
+    pdf = PdfPages(path_join(PATH_FIGURES, 'time_series', 'pdf'))
 
     for method in METHODS:
-        packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets', method, PERIOD], 'csv'), dtype={'date': int, 'port': int, 
+        packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'csv'), dtype={'date': int, 'port': int, 
             'nb_packets': int, 'nb_src': int, 'nb_dst':int, 'div_index_src': float, 'div_index_dst': float, 'SYN': float, 
             'mean_size': float, 'std_size': float})
         packets = packets[packets.nb_packets > N_MIN]
@@ -112,7 +112,7 @@ def plot_time_series(original_subnets):
 def gauss(b, mu, sigma): return 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- ((b - mu) / (2 * sigma))**2)
 
 def compute_mse_feature(original_subnets):
-    packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'), dtype = {'nb_packets': int})
+    packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'), dtype = {'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
 
     for subnet in original_subnets[:2]:
@@ -167,7 +167,7 @@ def compute_mse_feature(original_subnets):
     # legend = ax_mse.legend(loc='lower right', shadow=True)
     # ax_mse.grid(True)
 
-    # fig_mse.savefig(path_join([PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited'], 'png'), dpi=300)
+    # fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited', 'png'), dpi=300)
 
 def ecdf(data):
     raw_data = np.array(data)

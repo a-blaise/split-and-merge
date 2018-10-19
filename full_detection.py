@@ -23,15 +23,15 @@ from Settings import *
 from Features import Feature, list_features
 import matplotlib.pyplot as plt
 
-def path_join(parts, extension):
-    return parts[0] + '_'.join(map(str, parts[1:])) + '.' + extension
+def path_join(*parts):
+    return parts[0] + '_'.join(map(str, parts[1:-1])) + '.' + parts[-1]
 
 def pre_computation():
-    sub_df = pd.read_csv(path_join([PATH_SUBNETS, 'subnets', PERIOD], 'csv'), dtype={'date': str})
+    sub_df = pd.read_csv(path_join(PATH_SUBNETS, 'subnets', PERIOD, 'csv'), dtype={'date': str})
     original_subnets = sub_df.columns[1:].tolist()
 
     if PERIOD == 2018:
-        sub_df = sub_df.append(pd.read_csv(path_join([PATH_SUBNETS, 'subnets_2017'], 'csv'), dtype={'date': str})) # add last months of 2017 if 2018 period
+        sub_df = sub_df.append(pd.read_csv(path_join(PATH_SUBNETS, 'subnets_2017', 'csv'), dtype={'date': str})) # add last months of 2017 if 2018 period
 
     subnets = dict.fromkeys(original_subnets, {})
     for subnet, date in zip(original_subnets, sub_df['date']):
@@ -95,9 +95,7 @@ def compute_metrics(files, dataframe, date, sub):
     c_dst = c_dst.rename(index=str, columns={'port_dst': 'port'})
     if sub:
         c_dst.insert(1, 'key', sub)
-        file = files[0]    
-    else:
-        file = files[1]
+    file = files[0] if sub else files[1]
     c_dst.to_csv(path_or_buf=file, index=False, header=False, mode='a')
 
 def compute_subnets(original_subnets, sub_df):
@@ -108,7 +106,7 @@ def compute_subnets(original_subnets, sub_df):
     if not os.path.exists(PATH_PACKETS): os.mkdir(PATH_PACKETS)
 
     # Create one file for the whole dataset (subnets aggregated) and one for subnets not aggregated (separated)
-    files = [open(path_join([PATH_PACKETS, 'packets_subnets', method, PERIOD, 'test'], 'csv'), 'a') for method in METHODS]
+    files = [open(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'test', 'csv'), 'a') for method in METHODS]
     elements = ['date', 'port', 'nb_packets', 'port_src', 'SYN', 'mean_size', 'std_size', 'src_div_index', 'dst_div_index', 'port_div_index']
     
     for file in files:
@@ -123,7 +121,7 @@ def compute_subnets(original_subnets, sub_df):
         period = PERIOD
         if PERIOD == 2018 and int(date) > 1000: # 1001 = first of October. From October to December -> 2017
             period = 2017
-        chunks = pd.read_csv(path_join([PATH_CSVS, 'data', str(period) + str(date)], 'csv'), chunksize = N_BATCH, dtype = {'IP_src': object, 'IP_dst': object,
+        chunks = pd.read_csv(path_join(PATH_CSVS, 'data', str(period) + str(date), 'csv'), chunksize = N_BATCH, dtype = {'IP_src': object, 'IP_dst': object,
             'port_src': int, 'port_dst': int, 'SYN+ACK': int, 'RST+ACK': int, 'FIN+ACK': int, 'SYN': int, 'ACK': int, 'RST': int, 'size': int})
         
         # Find subnets of the day and put them on a list
@@ -152,18 +150,15 @@ def evaluation_ports(original_subnets):
     Generate an evaluation file named eval_*feature* with the results.
     """
     for method in METHODS:
-        packets = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets', method, PERIOD], 'csv'), dtype = {'nb_packets': int})
+        packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'csv'), dtype = {'nb_packets': int})
         packets = packets[packets.nb_packets > N_MIN]
-
-        subnets = ['all']
-        if method == 'separated':
-            subnets = original_subnets
+        subnets = original_subnets if method == 'separated' else ['all']
 
         for feat in list_features:
             feat.to_write = 'port;' + ';'.join(dates[N_DAYS:]) + '\n'
 
         # if not os.path.exists(PATH_EVAL): os.mkdir(PATH_EVAL)
-        # with open(path_join([PATH_EVAL, 'eval_total', method, PERIOD, T, N_MIN, N_DAYS], 'csv'), 'a') as file:
+        # with open(path_join(PATH_EVAL, 'eval_total', method, PERIOD, T, N_MIN, N_DAYS, 'csv'), 'a') as file:
         #     file.write('port;' + ';'.join(dates[N_DAYS:]) + '\n')
 
         ports = packets.port.unique()
@@ -176,16 +171,10 @@ def evaluation_ports(original_subnets):
                 feat.to_write += str(p) + ';'
                 for subnet in subnets:
                     del feat.time_vect[:]
-                    if method == 'aggregated':
-                        packets_sub = packets_port.copy()
-                    else:
-                        packets_sub = packets_port[packets_port.key == subnet]
+                    packets_sub = packets_port.copy() if method == 'aggregated' else packets_port[packets_port.key == subnet]
                     for i, date in enumerate(dates):
                         rep = packets_sub[packets_sub.date == int(date)]
-                        if not rep.empty:
-                            feat.time_vect.append(rep[feat.attribute].item())
-                        else:
-                            feat.time_vect.append(np.nan)
+                        feat.time_vect.append(rep[feat.attribute].item() if not rep.empty else np.nan)
                         if i > N_DAYS:
                             if feat.attribute == 'nb_packets':
                                 if np.isnan(np.sum(feat.time_vect[i - N_DAYS:i])):
@@ -203,7 +192,7 @@ def evaluation_ports(original_subnets):
                 feat.to_write += ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n'
 
         # for feat in list_features:
-        #     with open(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS], 'csv'), 'a') as file_feature:
+        #     with open(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS, 'csv'), 'a') as file_feature:
         #         file_feature.write(feat.to_write)
         #         file_feature.close()
 
@@ -211,11 +200,11 @@ def eval_scores():
     """ In evaluation ports files: convert anomalous subnets to number of anomalous subnets (= number of anomalies)"""
     list_features.append(Feature('total'))
     for feat, method in zip(list_features, METHODS):
-        ports = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS], 'csv'), sep=';', index_col=0)
+        ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
         # Lambda function to get the number of anomalies given a list of anomalous subnets
         get_nb_alarms = lambda x: ','.join([sign + str(str(x).count(sign)) for sign in range('+', '-')]) if str(x) != 'nan' else np.nan
         ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
-        ports.to_csv(path_join([PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep=';')
+        ports.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep=';')
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()

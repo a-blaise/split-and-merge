@@ -40,8 +40,8 @@ def value_to_yaxis(x):
 
 def heat_map_scores():
     """Draw a panorama of the occurrences of anomaly score (corresponds to the number of anomalies on one port for all features in all subnetworks)."""
-    value = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_agg', PERIOD], 'csv'))
-    ports = pd.read_csv(path_join([PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep = ';', index_col = 0)
+    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_agg', PERIOD, 'csv'))
+    ports = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
     ports = ports.applymap(sign_to_score)
     result = ports.apply(pd.Series.value_counts).iloc[1:]
     annot_matrix = result.copy(deep=True)
@@ -102,7 +102,7 @@ def heat_map_scores():
                     ha='center', va='center', color=color, size=8)
 
     if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
-    plt.savefig(path_join([PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD], 'png'), dpi=600,bbox_inches='tight')
+    plt.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'), dpi=600,bbox_inches='tight')
 
 def get_sum_string(x):
     """Lambda function to sum two given scores, e.g., '+5, -4' becomes 9."""
@@ -114,10 +114,10 @@ def get_sum_string(x):
 
 def heatmap_anomalies():
     """Draw a better characterization of each major anomaly by providing the change in features this day."""
-    value = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'))
+    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))
 
     list_anomalies, list_annotations, labels = ([] for i in range(3))
-    ports_annot = pd.read_csv(path_join([PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep = ';', index_col = 0)
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
 
@@ -129,7 +129,7 @@ def heatmap_anomalies():
                 labels.append('port ' + str(index) + '\non ' + date[0:2] + '/' + date[2:])
                 for feat in list_features:
                     if feat.attribute != 'nb_packets':
-                        evaluation = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep = ';')
+                        evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
                         rep = evaluation[evaluation.port == index].loc[:, date]
                         if not rep.empty:
                             if str(rep.item()) == 'nan':
@@ -196,7 +196,7 @@ def heatmap_anomalies():
                     text = ax.text(j, i+0.18, annot[1], ha='center', va='center', color=color(annot[1]), size=10)
 
     if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
-    plt.savefig(path_join([PATH_FIGURES, 'heatmap_anomalies', T, N_MIN, N_DAYS, PERIOD], 'png'), dpi=600, bbox_inches='tight')
+    plt.savefig(path_join(PATH_FIGURES, 'heatmap_anomalies', T, N_MIN, N_DAYS, PERIOD, 'png'), dpi=600, bbox_inches='tight')
 
 def color(pos):
     """Choose color of heatmap annotation (black or white) based on the color of the square."""

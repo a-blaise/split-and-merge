@@ -26,19 +26,16 @@ from Features import Feature, list_features
 from full_detection import path_join, pre_computation
 
 def sign_to_score(row):
-    total = 0
     if type(row) is str:
         nbs = row.split(',')
-        total = int(nbs[0]) + int(nbs[1][1:])
-    return total
+        return int(nbs[0]) + int(nbs[1][1:])
+    return 0
 
 def clustering_anomalies():
-    value = pd.read_csv(path_join([PATH_PACKETS, 'packets_subnets_separated', PERIOD], 'csv'))
-    list_anomalies = []
-    list_annotations = []
+    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))
+    list_anomalies, list_annotations, indexes = ([] for i in range(3))
 
-    indexes = []
-    ports_annot = pd.read_csv(path_join([PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep = ';', index_col = 0)
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
 
@@ -48,15 +45,9 @@ def clustering_anomalies():
                 annotations = []
                 indexes.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
                 for feat in list_features:
-                    evaluation = pd.read_csv(path_join([PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score'], 'csv'), sep = ';')
+                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
                     rep = evaluation[evaluation.port == index].loc[:, date]
-                    if rep.empty == False:
-                        if str(rep.item()) == 'nan':
-                            annotations.extend([0, 0])
-                        else:
-                            annotations.extend([int(rep.item().split(',')[i][1:]) for i in range(2)])
-                    else:
-                        annotations.extend([0, 0])
+                    annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)] if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annotations.append(annotations)
 
     heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-'] for feat in list_features], index = indexes)
@@ -65,15 +56,13 @@ def clustering_anomalies():
     heatmap = heatmap.drop(['+' + feature for feature in to_drop], axis=1)
     heatmap = heatmap.drop(['-' + feature for feature in to_drop], axis=1)
 
+    epsilon = 2.88 # essayer aussi de trouver un epsilon proportionnel en fonction du nombre de dimensions (= nbre de features * 2)
     # Set all vectors to the same scale
     X = StandardScaler().fit_transform(heatmap)
-
-    epsilon = 2.88 # essayer aussi de trouver un epsilon proportionnel en fonction du nombre de dimensions (= nbre de features * 2)
     db = DBSCAN(eps=epsilon, min_samples=1).fit(X)
     labels = db.labels_
 
-    for i in range(len(set(labels))):
-        print('Cluster ' + str(i + 1) + ':', [heatmap.iloc[j] for j, label in enumerate(labels) if label == i])
+    print('Cluster ' + str(i + 1) + ':', [heatmap.iloc[j] for j, label in enumerate(labels) for i in range(len(set(labels))) if label == i])
 
 def main(argv):
     clustering_anomalies()
