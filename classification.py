@@ -23,13 +23,7 @@ from sklearn.preprocessing import StandardScaler
 
 from Settings import *
 from Features import Feature, list_features
-from full_detection import path_join, pre_computation
-
-def sign_to_score(row):
-    if type(row) is str:
-        nbs = row.split(',')
-        return int(nbs[0]) + int(nbs[1][1:])
-    return 0
+from full_detection import path_join, pre_computation, sign_to_score
 
 def clustering_anomalies():
     value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))

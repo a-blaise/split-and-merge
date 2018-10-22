@@ -40,6 +40,13 @@ def pre_computation():
 
     return original_subnets, sub_df, subnets
 
+def sign_to_score(row):
+    """Lambda function to sum up too values into a total score."""
+    if type(row) is str:
+        nbs = row.split(',')
+        return int(nbs[0]) + int(nbs[1][1:])
+    return 0
+
 def check_orphans(row, daily_subnets):
     """Check which packets do not belong to any identified MAWI subnetwork (neither source IP nor destination IP)."""
     found = False
@@ -53,7 +60,7 @@ def check_orphans(row, daily_subnets):
                     found = True
                     break
     if not found:
-        print(row['IP_src'], row['IP_dst'], row['port_src'], row['port_dst'])
+        f"{row['IP_src']}, {row['IP_dst']}, {row['port_src']}, {row['port_dst']}"
 
 def keep_wide(IP_dst, original_subnets, daily_subnets):
     """Associate the destination IP address with its desanonymized subnetwork."""

@@ -21,19 +21,12 @@ import os
 
 from Settings import *
 from Features import Feature, Figure, list_features
-from full_detection import path_join, pre_computation
-
-def sign_to_score(row):
-    """Lambda function to sum up too values into a total score."""
-    if type(row) is str:
-        nbs = row.split(',')
-        return int(nbs[0]) + int(nbs[1][1:])
-    return 0
+from full_detection import path_join, pre_computation, sign_to_score
 
 def value_to_yaxis(x):
     """Lambda function to replace each non-zero value by its y-number."""
     new_vector = x
-    for (i, el) in enumerate(x):
+    for i, el in enumerate(x):
         if el > 0:
             new_vector[i] = int(x.name)
     return new_vector
@@ -131,16 +124,8 @@ def heatmap_anomalies():
                     if feat.attribute != 'nb_packets':
                         evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
                         rep = evaluation[evaluation.port == index].loc[:, date]
-                        if not rep.empty:
-                            if str(rep.item()) == 'nan':
-                                anomalies.append(0)
-                                annotations.append(0)
-                            else:
-                                anomalies.append(get_sum_string(rep.item()))
-                                annotations.append(rep.item())
-                        else:
-                            anomalies.append(0)
-                            annotations.append(0)
+                        anomalies.append(get_sum_string(rep.item()) if not rep.empty and str(rep.item() != 'nan') else 0)
+                        annotations.append(rep.item() if not rep.empty and str(rep.item() != 'nan') else 0)
                 list_anomalies.append(anomalies)
                 list_annotations.append(annotations)
 

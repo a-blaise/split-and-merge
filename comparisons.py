@@ -33,7 +33,7 @@ def anomalies_ndays(subnets, nb_days):
     # Compute anomalies by varying the number of days in the model
     files = {}
     for nb_day in nb_days:
-        files[nb_day] = open(path_join(PATH_EVAL, 'anomalies', 'N_DAYS', nb_day, 'test3', 'txt'), 'a')
+        files[nb_day] = open(path_join(PATH_EVAL, 'anomalies', 'N_DAYS', nb_day, 'txt'), 'a')
 
     LEN_PERIOD = 10
     for p in ports:
@@ -153,30 +153,46 @@ def accurate_comparison(type_comparison, baseline, intervals):
     threshold_anomalies = dict.fromkeys(intervals, []) # contains anomalies whose nb_occur is over the threshold
 
     for interval in intervals:
-        file = open(path_join(PATH_EVAL, 'anomalies', type_comparison, interval, 'test2', 'txt'), 'r')
+        file = open(path_join(PATH_EVAL, 'anomalies', type_comparison, interval, THRESHOLD_ANO, 'txt'), 'r')
         anomalies = file.read().split(',')[:-1]
         file.close()
         all_anomalies[interval] = anomalies
         threshold_anomalies[interval] = list(filter(lambda a: int(a.split('|')[2]) > THRESHOLD_ANO, anomalies))
 
     unique_anomalies = []
-    for l in threshold_anomalies.values():
-        unique_anomalies.extend([el.split('|')[0] + '|' + el.split('|')[1] for el in l])
+    for threshold in threshold_anomalies.values():
+        unique_anomalies.extend('|'.join(el.split('|')[:-1]) for el in threshold)
     unique_anomalies = set(unique_anomalies)
 
-    final_array = pd.DataFrame(index=unique_anomalies, columns=intervals)
+    final_array = pd.DataFrame(index=unique_anomalies, columns=intervals, dtype=np.int8)
     for value in unique_anomalies:
         for interval in intervals:
-            final_array.loc[value, interval] = 3
             anomalies = all_anomalies[interval]
             for anomaly in anomalies:
                 if value in anomaly:
-                    final_array.loc[value, interval] = anomaly.split('|')[2]
+                    final_array.loc[value, interval] = int(anomaly.split('|')[2])
                     break
             else:
                 final_array.loc[value, interval] = 0
 
-    print(final_array)
+    final = np.array(final_array, dtype=int)
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(final, cmap='YlOrRd')
+
+    ax.set_xticks(np.arange(len(intervals)))
+    ax.set_yticks(np.arange(len(unique_anomalies)))
+
+    ax.set_xticklabels(intervals)
+    ax.set_yticklabels([an.split('|')[0] + ' - ' + an.split('|')[1][0:2] + '/' + an.split('|')[1][2:] for an in unique_anomalies])
+
+    for i in range(len(unique_anomalies)):
+        for j in range(len(intervals)):
+            text = ax.text(j, i, final[i, j], ha="center", va="center", color="b")
+
+    ax.set_title('Intensity of anomalies with N_DAYS varying')
+    fig.tight_layout()
+    plt.show()
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()

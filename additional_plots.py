@@ -23,14 +23,8 @@ from scipy.stats import spearmanr, pearsonr
 
 from Settings import *
 from Features import Feature, Figure, list_features, list_figures
-from full_detection import path_join, pre_computation
+from full_detection import path_join, pre_computation, sign_to_score
 from sklearn.metrics import mean_squared_error
-
-def sign_to_score(row):
-    if type(row) is str:
-        nbs = row.split(',')
-        return int(nbs[0]) + int(nbs[1][1:])
-    return 0
 
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
@@ -52,20 +46,16 @@ def plot_time_series(original_subnets):
                     fig.reset_object()
                     for date in dates:
                         rep = packets_port[packets_port.date == int(date)]
-                        if not rep.empty:
-                            fig.time_vect.append(rep[fig.attribute].item())
-                        else:
-                            if fig.attribute == 'nb_packets':
-                                fig.time_vect.append(0)
-                            else:
-                                fig.time_vect.append(np.nan)
+                        fig.time_vect.append(rep[fig.attribute].item() if not rep.empty else np.nan)
+                    if fig.attribute == 'nb_packets':
+                        fig.time_vect = fig.time_vect.fillna(0)
                     fig.init_figs()
                     fig.sub_time_vect['Whole network'] = fig.time_vect
                     fig.ax_a.plot(x, fig.time_vect, '-', label = 'Whole network')
                     fig.ax_a.set_xlabel('Time')
                     fig.ax_a.set_ylabel(' '.join([fig.legend, 'on port', str(p), 'aggregated']))
                     fig.ax_a.set_xticks(x)
-                    fig.ax_a.set_xticklabels(map(lambda x: x[0:2] + '/' + x[2:], dates))
+                    fig.ax_a.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), dates))
                     plt.setp(fig.ax_a.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
                     lgd = fig.ax_a.legend()
                     fig.fig_a.savefig(pdf, format = 'pdf', dpi=600, bbox_extra_artists=(lgd,), bbox_inches='tight')
@@ -76,19 +66,15 @@ def plot_time_series(original_subnets):
                         fig.time_vect = []
                         for date in dates:
                             rep = packets_port[(packets_port.date == int(date)) & (packets_port.key == subnet)]
-                            if not rep.empty:
-                                fig.time_vect.append(rep[fig.attribute].item())
-                            else:
-                                if fig.attribute == 'nb_packets':
-                                    fig.time_vect.append(0)
-                                else:
-                                    fig.time_vect.append(np.nan)
+                            fig.time_vect.append(rep[fig.attribute].item() if not rep.empty else np.nan)
+                        if fig.attribute == 'nb_packets':
+                            fig.time_vect = fig.time_vect.fillna(0)
                         fig.sub_time_vect[subnet] = fig.time_vect
                         fig.ax.plot(x, fig.time_vect, '-', label = str(subnet))
                     fig.ax.set_xlabel('Time')
                     fig.ax.set_ylabel(' '.join([fig.legend, 'on port', str(p), 'not aggregated']))
                     fig.ax.set_xticks(x)
-                    fig.ax.set_xticklabels(map(lambda x: x[0:2] + '/' + x[2:], dates))
+                    fig.ax.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), dates))
                     plt.setp(fig.ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
                     lgd = fig.ax.legend(handletextpad=0.1, labelspacing=0.24, loc='upper center', bbox_to_anchor=(0.48, 1.27),
                         fancybox=True, shadow=True, ncol=2)
@@ -116,24 +102,21 @@ def plot_time_series(original_subnets):
                 fig_totake.savefig(pdf, format = 'pdf', dpi=600, bbox_extra_artists=(lgd,), bbox_inches='tight')
     pdf.close()
 
-def gauss(b, mu, sigma): return 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(- ((b - mu) / (2 * sigma))**2)
+def gauss(b): return 1 / np.sqrt(2 * np.pi) * np.exp(- (b / 2)**2)
 
 def compute_mse_feature(original_subnets):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'), dtype = {'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
 
-    for subnet in original_subnets[:2]:
+    for subnet in original_subnets:
         packets_subnet = packets[packets.key == subnet]
         ports = packets_subnet.port.unique()
-        for p in ports[:5]:
+        for p in ports:
             packets_port = packets_subnet[packets_subnet.port == p]
             for date in dates[:N_DAYS]:
                 rep = packets_port[packets_port.date == int(date)]
                 for feat in list_features:
-                    if not rep.empty:
-                        feat.time_vect.append(rep[feat.attribute].item())
-                    else:
-                        feat.time_vect.append(np.nan)
+                    feat.time_vect.append(rep[feat.attribute].item() if not rep.empty else np.nan)
             for feat in list_features:
                 vector = [feat.time_vect[i] for i in range(N_DAYS) if not np.isnan(feat.time_vect[i])]
                 mu = np.nanmean(vector)
@@ -143,12 +126,7 @@ def compute_mse_feature(original_subnets):
                     mu = 0
                     sigma = 1
                     count, bins = np.histogram(n_vector, BINS_SIZE, density=1)
-                    regression = [] # value of Gaussian function in the middle of the interval
-                    for i, b in enumerate(bins):
-                        value = gauss(b, mu, sigma)
-                        if i != 0:
-                            regression.append(temp + value)
-                        temp = value
+                    regression = [gauss(b) for b in bins[:-1] + np.diff(bins) / 2]
                     error = mean_squared_error(count, regression)
 
                     fig, ax = plt.subplots()
@@ -159,22 +137,21 @@ def compute_mse_feature(original_subnets):
                         ax.set_title('port ' + str(p) + ' feature ' + feat.attribute + ' ' + str(error))
                     if not np.isnan(error):
                         feat.mse.append(error)
-                    print(p, feat.attribute, bins, count, regression, error)
-
+                    f'{p}, {feat.attribute}, {bins}, {count}, {regression}, {error}'
                 feat.reset_object()
 
-    # fig_mse, ax_mse = plt.subplots()
-    # for feat in list_features:
-    #     x, y = ecdf(feat.mse)
-    #     ax_mse.plot(x, y, label=feat.attribute + ' ' + str(np.round(np.nanmedian(feat.mse), 2)))
+    fig_mse, ax_mse = plt.subplots()
+    for feat in list_features:
+        x, y = ecdf(feat.mse)
+        ax_mse.plot(x, y, label=feat.attribute + ' ' + str(np.round(np.nanmedian(feat.mse), 2)))
 
-    # ax_mse.set_title('CDF MSE per feature ')
-    # ax_mse.set_xlabel('Mean Squared Error')
-    # ax_mse.set_ylabel('Probability to have this MSE')
-    # legend = ax_mse.legend(loc='lower right', shadow=True)
-    # ax_mse.grid(True)
+    ax_mse.set_title('CDF MSE per feature ')
+    ax_mse.set_xlabel('Mean Squared Error')
+    ax_mse.set_ylabel('Probability to have this MSE')
+    legend = ax_mse.legend(loc='lower right', shadow=True)
+    ax_mse.grid(True)
 
-    # fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited', 'png'), dpi=300)
+    fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited', 'png'), dpi=300)
 
 def ecdf(data):
     raw_data = np.array(data)
@@ -190,42 +167,41 @@ def ecdf(data):
 
 def correlation_features():
     value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))
-    list_anomalies, list_annotations, indexes = ([] for i in range(3))
+    list_annotations = []
 
     ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
 
-    for index, row in ports.iterrows():
+    for port, row in ports.iterrows():
         for i, date in enumerate(dates[N_DAYS:]):
             if row[i] > THRESHOLD_ANO:
                 annotations = []
-                indexes.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
                 for feat in list_features:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
-                    rep = evaluation[evaluation.port == index].loc[:, date]
+                    rep = evaluation[evaluation.port == port].loc[:, date]
                     annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)] if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annotations.append(annotations)
 
-    heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-'] for feat in list_features], index = indexes)
+    heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-'] for feat in list_features])
     
     for ind_i, i in enumerate(list_features):
         for ind_j, j in enumerate(list_features):
             if ind_j > ind_i:
                 for s in ['+', '-']:
                     for t in ['+', '-']:
-                        rho_s, p_s= spearmanr(heatmap[s + i.attribute], heatmap[t + j.attribute])
+                        rho_s, p_s = spearmanr(heatmap[s + i.attribute], heatmap[t + j.attribute])
                         rho_p, p_p = pearsonr(heatmap[s + i.attribute], heatmap[t + j.attribute])
                         if rho_s > 0.5 or rho_p > 0.5:
-                            print(s + i.attribute, t + j.attribute, rho_s, rho_p)
+                            f'{s + i.attribute}, {t + j.attribute}, {rho_s}, {rho_p}'
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
     # get_frequency_anomalies()
-    # compute_mse_feature(original_subnets)
-    correlation_features()
+    compute_mse_feature(original_subnets)
+    # correlation_features()
     return 0
 
 if __name__ == '__main__':
