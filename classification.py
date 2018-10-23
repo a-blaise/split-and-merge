@@ -13,53 +13,101 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import os
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 
-from Settings import *
-from Features import Feature, list_features
-from full_detection import path_join, pre_computation, sign_to_score
+from settings import *
+from features import LIST_FEATURES
+from full_detection import path_join, sign_to_score
+
+class Class_anomaly():
+    def __init__(self, description, *characs):
+        self.description = description
+        self.features = list(characs)
 
 def clustering_anomalies():
-    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))
-    list_anomalies, list_annotations, indexes = ([] for i in range(3))
+    list_annot, indexes = ([] for i in range(2))
 
-    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
+                                        N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports_annot.applymap(sign_to_score)
-    ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
+    ports = ports.loc[(ports > T_ANO).any(axis=1)]
 
     for index, row in ports.iterrows():
-        for i, date in enumerate(dates[N_DAYS:]):
-            if row[i] > THRESHOLD_ANO:
+        for i, date in enumerate(DATES[N_DAYS:]):
+            if row[i] > T_ANO:
                 annotations = []
                 indexes.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
-                for feat in list_features:
-                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
+                for feat in LIST_FEATURES:
+                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                                       'separated', PERIOD, T, N_MIN,
+                                                       N_DAYS, 'score', 'csv'), sep=';')
                     rep = evaluation[evaluation.port == index].loc[:, date]
-                    annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)] if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
-                list_annotations.append(annotations)
+                    annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)]
+                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                list_annot.append(annotations)
 
-    heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-'] for feat in list_features], index = indexes)
+    heatmap = pd.DataFrame(list_annot, columns=[sign + feat.attribute for feat in LIST_FEATURES
+                                                for sign in ['+', '-']], index=indexes)
+
+    # to_drop = ['nb_packets', 'SYN', 'port_div_index']
     
-    to_drop = ['nb_packets', 'SYN', 'port_div_index']
+    to_drop = ['nb_packets']
     heatmap = heatmap.drop(['+' + feature for feature in to_drop], axis=1)
     heatmap = heatmap.drop(['-' + feature for feature in to_drop], axis=1)
 
-    epsilon = 2.88 # essayer aussi de trouver un epsilon proportionnel en fonction du nombre de dimensions (= nbre de features * 2)
+    epsilon = 2.88
     # Set all vectors to the same scale
-    X = StandardScaler().fit_transform(heatmap)
-    db = DBSCAN(eps=epsilon, min_samples=1).fit(X)
-    labels = db.labels_
+    heatmap_fit = StandardScaler().fit_transform(heatmap)
+    dbscan = DBSCAN(eps=epsilon, min_samples=1).fit(heatmap_fit)
+    labels = dbscan.labels_
 
-    print('Cluster ' + str(i + 1) + ':', [heatmap.iloc[j] for j, label in enumerate(labels) for i in range(len(set(labels))) if label == i])
+    # print('Cluster ' + str(i + 1) + ':', [heatmap.iloc[j] for j, label in enumerate(labels)
+    #                                       for i in range(len(set(labels))) if label == i])
 
+def classify_anomalies(classes):
+    list_annot, indexes = ([] for i in range(2))
+
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
+                                        N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+    ports = ports_annot.applymap(sign_to_score)
+    ports = ports.loc[(ports > T_ANO).any(axis=1)]
+
+    for index, row in ports.iterrows():
+        for i, date in enumerate(DATES[N_DAYS:]):
+            if row[i] > T_ANO:
+                annotations = []
+                indexes.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
+                for feat in LIST_FEATURES:
+                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                                       'separated', PERIOD, T, N_MIN,
+                                                       N_DAYS, 'score', 'csv'), sep=';')
+                    rep = evaluation[evaluation.port == index].loc[:, date]
+                    annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
+                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                list_annot.append(annotations)
+
+    heatmap = pd.DataFrame(list_annot, columns=[sign + feat.attribute for feat in LIST_FEATURES
+                                                for sign in ['+', '-']], index=indexes)
+
+    to_drop = ['nb_packets']
+    heatmap = heatmap.drop(['+' + feature for feature in to_drop], axis=1)
+    heatmap = heatmap.drop(['-' + feature for feature in to_drop], axis=1)
+
+    for cl in classes:
+        temp = heatmap.copy()
+        for feat in cl.features:
+            temp = temp.loc[temp[feat] > 0]
+        print(cl.description)
+        print(temp)
+            
 def main(argv):
-    clustering_anomalies()
+    classes = [Class_anomaly('scan from a single source', '-src_div_index', '+dst_div_index'),
+               Class_anomaly('botnet behavior', '+src_div_index', '+dst_div_index'),
+               Class_anomaly('botnet behavior', '+src_div_index', '+dst_div_index')]
+
+    # clustering_anomalies()
+    classify_anomalies(classes)
     return 0
 
 if __name__ == '__main__':

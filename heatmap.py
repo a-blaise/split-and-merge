@@ -13,177 +13,198 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-import os
 
-from Settings import *
-from Features import Feature, Figure, list_features
-from full_detection import path_join, pre_computation, sign_to_score
+from settings import *
+from features import LIST_FEATURES
+from full_detection import path_join, sign_to_score
 
-def value_to_yaxis(x):
+def value_to_yaxis(value):
     """Lambda function to replace each non-zero value by its y-number."""
-    new_vector = x
-    for i, el in enumerate(x):
-        if el > 0:
+    new_vector = value
+    for i, element in enumerate(x):
+        if element > 0:
             new_vector[i] = int(x.name)
     return new_vector
 
 def heat_map_scores():
-    """Draw a panorama of the occurrences of anomaly score (corresponds to the number of anomalies on one port for all features in all subnetworks)."""
+    """Draw a panorama of the occurrences of anomaly score
+    (corresponds to the number of anomalies on one port for all features in all subnetworks)."""
     value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_agg', PERIOD, 'csv'))
-    ports = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
+    ports = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T,
+                                  N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports.applymap(sign_to_score)
     result = ports.apply(pd.Series.value_counts).iloc[1:]
     annot_matrix = result.copy(deep=True)
-    result.apply(value_to_yaxis, axis = 1)
+    result.apply(value_to_yaxis, axis=1)
     data_annot = np.array(annot_matrix)
     data = np.array(result)
 
-    # Plot
-    fig, ax = plt.subplots()
-    im = ax.imshow(data, cmap='YlOrRd', aspect=.7)
+    fig, axis = plt.subplots()
+    image = axis.imshow(data, cmap='YlOrRd', aspect=.7)
 
-    ax.set_ylabel('Anomaly score')
-    ax.set_xlabel('Time')
+    axis.set_ylabel('Anomaly score')
+    axis.set_xlabel('Time')
 
-    ax.set_yticks(np.arange(data.shape[0]))
-    ax.set_xticks(np.arange(data.shape[1]))
+    axis.set_yticks(np.arange(data.shape[0]))
+    axis.set_xticks(np.arange(data.shape[1]))
 
-    ax.set_yticklabels(result.index.values)
-    ax.set_xticklabels([x[0:2] + '/' + x[2:] for x in result.columns.values])
+    axis.set_yticklabels(result.index.values)
+    axis.set_xticklabels([x[0:2] + '/' + x[2:] for x in result.columns.values])
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
+    plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
 
     # Loop over data dimensions and create text annotations.
     for i in range(0, data.shape[0]):
         for j in range(0, data.shape[1]):
             if not np.isnan(data_annot[i, j]):
-                color='black'
-                if i>6:
-                    score = result.iloc[i,j]
-                    df = ports.iloc[:, j]
-                    port = df[df == score].index[0]
-                    per = int(round(value[(value.date == int(dates[N_DAYS + j])) & (value.port == int(port))]['nb_packets'] / 10 ** 6 * 1000)) # per mil
-                    text = ax.text(j+0.55, i-0.13, port, color=color, size=6.5)
-                    text = ax.text(j+0.55, i+0.45, per, color=color, size=6.5)
+                color = 'black'
+                if i > 6:
+                    score = result.iloc[i, j]
+                    temp_df = ports.iloc[:, j]
+                    port = temp_df[temp_df == score].index[0]
+                    per = int(round(value[(value.date == int(DATES[N_DAYS + j]))
+                                          & (value.port == int(port))]
+                                    ['nb_packets'] / 10 ** 6 * 1000))
+                    text = axis.text(j+0.55, i-0.13, port, color=color, size=6.5)
+                    text = axis.text(j+0.55, i+0.45, per, color=color, size=6.5)
 
-                    arrow_properties = dict(width=0.1, headlength=4, headwidth=5, facecolor='black', shrink=0.05)
-                    ax.annotate('ADB exploit', xy=(6, 15.5), xytext=(4, 17.5), arrowprops=arrow_properties)
-                    text = ax.text(4, 18.2, 'port 5555 - 0.1 %', color='black', size=7)
-                    # ax.annotate('Exploit', xy=(10, 13.5), xytext=(8.5, 12), arrowprops=arrow_properties)
-                    # text = ax.text(8.5, 12.5, 'port 7001 - <0.1 %', color='black', size=6.5)
-                    ax.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.8), arrowprops=arrow_properties)
-                    text = ax.text(11.5, 15.5, 'port 2000 - 0.3 %', color='black', size=7)
-                    ax.annotate('Hajime scan', xy=(13.5, 18), xytext=(15, 17.5), arrowprops=arrow_properties)
-                    text = ax.text(15, 18.2, 'port 8291 - <0.1 %', color='black', size=7)
-                    # ax.annotate('Exploit', xy=(0, 14.5), xytext=(0, 16.5), arrowprops=arrow_properties)
-                    # text = ax.text(0, 17, 'port 2222 - 0.1 %', color='black', size=6.5)
-                    ax.annotate('Scan break', xy=(16.5, 16), xytext=(18, 15.5), arrowprops=arrow_properties)
-                    text = ax.text(18, 16.2, 'port 23 - 2.4 %', color='black', size=7)
-                    ax.annotate('Scan break', xy=(17.5, 15), xytext=(18, 15.5), arrowprops=arrow_properties)
-                    text = ax.text(18, 16.2, 'port 23 - 2.4 %', color='black', size=7)
-                    ax.annotate('Massive scan', xy=(5, 14.5), xytext=(5.6, 12.5), arrowprops=arrow_properties)
-                    text = ax.text(5.6, 13.2, 'port 81 - <0.1 %', color='black', size=7)
-                    ax.annotate('Massive scan', xy=(9, 15.5), xytext=(5.6, 12.5), arrowprops=arrow_properties)
-                    text = ax.text(5.6, 13.2, 'port 81 - <0.1 %', color='black', size=7)
-                if i > 12: color='white'
-                text = ax.text(j, i, int(data_annot[i, j]), 
-                    ha='center', va='center', color=color, size=8)
+                    props = dict(width=0.1, headlength=4, headwidth=5,
+                                 facecolor='black', shrink=0.05)
+                    axis.annotate('ADB exploit', xy=(6, 15.5), xytext=(4, 17.5), arrowprops=props)
+                    text = axis.text(4, 18.2, 'port 5555 - 0.1 %', color=color, size=7)
+                    axis.annotate('Exploit', xy=(10, 13.5), xytext=(8.5, 12), arrowprops=props)
+                    text = axis.text(8.5, 12.5, 'port 7001 - <0.1 %', color='black', size=6.5)
+                    axis.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.8),
+                                  arrowprops=props)
+                    text = axis.text(11.5, 15.5, 'port 2000 - 0.3 %', color=color, size=7)
+                    axis.annotate('Hajime scan', xy=(13.5, 18), xytext=(15, 17.5),
+                                  arrowprops=props)
+                    text = axis.text(15, 18.2, 'port 8291 - <0.1 %', color=color, size=7)
+                    axis.annotate('Exploit', xy=(0, 14.5), xytext=(0, 16.5),
+                                  arrowprops=props)
+                    text = axis.text(0, 17, 'port 2222 - 0.1 %', color='black', size=6.5)
+                    axis.annotate('Scan break', xy=(16.5, 16), xytext=(18, 15.5),
+                                  arrowprops=props)
+                    text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
+                    axis.annotate('Scan break', xy=(17.5, 15), xytext=(18, 15.5),
+                                  arrowprops=props)
+                    text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
+                    axis.annotate('Massive scan', xy=(5, 14.5), xytext=(5.6, 12.5),
+                                  arrowprops=props)
+                    text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
+                    axis.annotate('Massive scan', xy=(9, 15.5), xytext=(5.6, 12.5),
+                                  arrowprops=props)
+                    text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
+                if i > 12:
+                    color = 'white'
+                text = axis.text(j, i, int(data_annot[i, j]),
+                                 ha='center', va='center', color=color, size=8)
 
-    if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
-    plt.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'), dpi=600,bbox_inches='tight')
+    if not os.path.exists(PATH_FIGURES):
+        os.mkdir(PATH_FIGURES)
+    fig.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'),
+                dpi=600, bbox_inches='tight')
 
-def get_sum_string(x):
+def get_sum_string(element):
     """Lambda function to sum two given scores, e.g., '+5, -4' becomes 9."""
     total = 0
-    for char in list(str(x)):
+    for char in list(str(element)):
         if char.isdigit():
             total += int(char)
     return total
 
 def heatmap_anomalies():
-    """Draw a better characterization of each major anomaly by providing the change in features this day."""
-    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'))
-
+    """Draw a better characterization of each major anomaly
+    by providing the change in features this day."""
     list_anomalies, list_annotations, labels = ([] for i in range(3))
-    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';', index_col = 0)
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD,
+                                        T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
 
     for index, row in ports.iterrows():
-        for i, date in enumerate(dates[N_DAYS:]):
+        for i, date in enumerate(DATES[N_DAYS:]):
             if row[i] > THRESHOLD_ANO:
                 anomalies = []
                 annotations = []
                 labels.append('port ' + str(index) + '\non ' + date[0:2] + '/' + date[2:])
-                for feat in list_features:
+                for feat in LIST_FEATURES:
                     if feat.attribute != 'nb_packets':
-                        evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep = ';')
+                        evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                                           'separated', PERIOD, T, N_MIN, N_DAYS,
+                                                           'score', 'csv'), sep=';')
                         rep = evaluation[evaluation.port == index].loc[:, date]
-                        anomalies.append(get_sum_string(rep.item()) if not rep.empty and str(rep.item() != 'nan') else 0)
-                        annotations.append(rep.item() if not rep.empty and str(rep.item() != 'nan') else 0)
+                        anomalies.append(get_sum_string(rep.item()) if not rep.empty
+                                         and str(rep.item() != 'nan') else 0)
+                        annotations.append(rep.item() if not rep.empty
+                                           and str(rep.item() != 'nan') else 0)
                 list_anomalies.append(anomalies)
                 list_annotations.append(annotations)
 
-    columns = [feat.attribute for feat in list_features if feat.attribute != 'nb_packets']
-    heatmap = pd.DataFrame(list_anomalies, columns=columns, index = labels)
-    heatmap_annot = pd.DataFrame(list_annotations, columns=columns, index = labels)
+    columns = [feat.attribute for feat in LIST_FEATURES if feat.attribute != 'nb_packets']
+    heatmap = pd.DataFrame(list_anomalies, columns=columns, index=labels)
+    heatmap_annot = pd.DataFrame(list_annotations, columns=columns, index=labels)
 
     data = np.array(heatmap)
     data_annot = np.array(heatmap_annot)
 
     # Plot
-    fig, ax = plt.subplots()
-    im = ax.imshow(data, cmap='YlOrRd', aspect=.45)
+    fig, axis = plt.subplots()
+    image = axis.imshow(data, cmap='YlOrRd', aspect=.45)
 
-    ax.set_ylabel('Anomaly ID')
-    ax.set_xlabel('Feature')
+    axis.set_ylabel('Anomaly ID')
+    axis.set_xlabel('Feature')
 
-    ax.set_xticks(np.arange(data.shape[1]))
-    ax.set_yticks(np.arange(data.shape[0]))
-    ax.set_yticklabels(labels)
-    ax.set_xticklabels(['srcDivInd', 'dstDivInd', 'portDivInd', 'meanSize', 'stdSize', 'perSyn'])
+    axis.set_xticks(np.arange(data.shape[1]))
+    axis.set_yticks(np.arange(data.shape[0]))
+    axis.set_yticklabels(labels)
+    axis.set_xticklabels(['srcDivInd', 'dstDivInd', 'portDivInd', 'meanSize', 'stdSize', 'perSyn'])
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=20, ha='right', rotation_mode='anchor')
+    plt.setp(axis.get_xticklabels(), rotation=20, ha='right', rotation_mode='anchor')
 
-    for edge, spine in ax.spines.items(): spine.set_visible(False)
-    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
-    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
-    ax.grid(which='minor', color='w', linestyle='-', linewidth=3)
-    ax.tick_params(which='minor', bottom=False, left=False)
+    for edge, spine in axis.spines.items():
+        spine.set_visible(False)
+    axis.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+    axis.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+    axis.grid(which='minor', color='w', linestyle='-', linewidth=3)
+    axis.tick_params(which='minor', bottom=False, left=False)
 
-    ax.set_yticklabels(labels)
-    ax.set_xticklabels(columns)
+    axis.set_yticklabels(labels)
+    axis.set_xticklabels(columns)
 
     # Loop over data dimensions and create text annotations.
-    for i, j in zip([range(0, data.shape[i] for i in range(2))]):
+    for i, j in zip([(range(0, data.shape[i]) for i in range(2))]):
         annot = str(data_annot[i, j]).split(',')
         if len(annot) == 1:
-            text = ax.text(j, i, '0',
-                ha='center', va='center', color='black', size=10)
-        # 3 cases: two non-zero values, one non-zero value or two zero values
+            text = axis.text(j, i, '0',
+                             ha='center', va='center', color='black', size=10)
         else:
             if '0' in annot[0]:
                 if '0' in annot[1]:
-                    text = ax.text(j, i, '0', ha='center', va='center', color='black', size=10)
+                    text = axis.text(j, i, '0', ha='center', va='center',
+                                     color='black', size=10)
                 else:
-                    text = ax.text(j, i, annot[1], ha='center', va='center', color=color(annot[1]), size=10)
+                    text = axis.text(j, i, annot[1], ha='center', va='center',
+                                     color=choose_color(annot[1]), size=10)
             else:
                 if '0' in annot[1]:
-                    text = ax.text(j, i, annot[0], ha='center', va='center', color=color(annot[0]), size=10)
+                    text = axis.text(j, i, annot[0], ha='center', va='center',
+                                     color=choose_color(annot[0]), size=10)
                 else:
-                    text = ax.text(j, i-0.18, annot[0], ha='center', va='center', color=color(annot[0]), size=10)
-                    text = ax.text(j, i+0.18, annot[1], ha='center', va='center', color=color(annot[1]), size=10)
+                    text = axis.text(j, i-0.18, annot[0], ha='center', va='center',
+                                     color=choose_color(annot[0]), size=10)
+                    text = axis.text(j, i+0.18, annot[1], ha='center', va='center',
+                                     color=choose_color(annot[1]), size=10)
 
-    if not os.path.exists(PATH_FIGURES): os.mkdir(PATH_FIGURES)
-    plt.savefig(path_join(PATH_FIGURES, 'heatmap_anomalies', T, N_MIN, N_DAYS, PERIOD, 'png'), dpi=600, bbox_inches='tight')
+    if not os.path.exists(PATH_FIGURES):
+        os.mkdir(PATH_FIGURES)
+    fig.savefig(path_join(PATH_FIGURES, 'heatmap_anomalies', T, N_MIN,
+                          N_DAYS, PERIOD, 'png'), dpi=600, bbox_inches='tight')
 
-def color(pos):
+def choose_color(pos):
     """Choose color of heatmap annotation (black or white) based on the color of the square."""
     if int(pos[1:]) > 6:
         return 'white'
