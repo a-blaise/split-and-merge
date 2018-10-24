@@ -16,7 +16,7 @@
 import matplotlib.pyplot as plt
 
 from settings import *
-from features import LIST_FEATURES
+from features import FEATURES
 from full_detection import path_join, sign_to_score
 
 def value_to_yaxis(value):
@@ -130,7 +130,7 @@ def heatmap_anomalies():
                 anomalies = []
                 annotations = []
                 labels.append('port ' + str(index) + '\non ' + date[0:2] + '/' + date[2:])
-                for feat in LIST_FEATURES:
+                for feat in FEATURES:
                     if feat.attribute != 'nb_packets':
                         evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                            'separated', PERIOD, T, N_MIN, N_DAYS,
@@ -143,7 +143,7 @@ def heatmap_anomalies():
                 list_anomalies.append(anomalies)
                 list_annotations.append(annotations)
 
-    columns = [feat.attribute for feat in LIST_FEATURES if feat.attribute != 'nb_packets']
+    columns = [feat.attribute for feat in FEATURES if feat.attribute != 'nb_packets']
     heatmap = pd.DataFrame(list_anomalies, columns=columns, index=labels)
     heatmap_annot = pd.DataFrame(list_annotations, columns=columns, index=labels)
 

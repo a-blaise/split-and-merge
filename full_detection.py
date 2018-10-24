@@ -16,7 +16,7 @@
 import ipaddress
 
 from settings import *
-from features import Feature, LIST_FEATURES
+from features import Feature, FEATURES
 
 def path_join(*parts):
     return parts[0] + '_'.join(map(str, parts[1:-1])) + '.' + parts[-1]
@@ -127,7 +127,7 @@ def compute_subnets(original_subnets, sub_df):
         else:
             file.write(','.join(elements))
 
-    for date in dates:
+    for date in DATES:
         period = PERIOD
         # 1001 = first of October. From October to December -> 2017
         if PERIOD == 2018 and int(date) > 1000:
@@ -171,28 +171,28 @@ def evaluation_ports(original_subnets):
         packets = packets[packets.nb_packets > N_MIN]
         subnets = original_subnets if method == 'separated' else ['all']
 
-        for feat in LIST_FEATURES:
-            feat.to_write = 'port;' + ';'.join(dates[N_DAYS:]) + '\n'
+        for feat in FEATURES:
+            feat.to_write = 'port;' + ';'.join(DATES[N_DAYS:]) + '\n'
 
         if not os.path.exists(PATH_EVAL):
             os.mkdir(PATH_EVAL)
         with open(path_join(PATH_EVAL, 'eval_total', method, PERIOD, T,
                             N_MIN, N_DAYS, 'csv'), 'a') as file:
-            file.write('port;' + ';'.join(dates[N_DAYS:]) + '\n')
+            file.write('port;' + ';'.join(DATES[N_DAYS:]) + '\n')
 
         ports = packets.port.unique()
         for port in ports:
-            mzscores_total = dict.fromkeys(dates[N_DAYS:], '')
+            mzscores_total = dict.fromkeys(DATES[N_DAYS:], '')
             packets_port = packets[packets.port == port]
 
-            for feat in LIST_FEATURES:
+            for feat in FEATURES:
                 feat.reset_object()
                 feat.to_write += str(port) + ';'
                 for subnet in subnets:
                     del feat.time_vect[:]
                     packets_sub = (packets_port.copy() if method == 'aggregated'
                                    else packets_port[packets_port.key == subnet])
-                    for i, date in enumerate(dates):
+                    for i, date in enumerate(DATES):
                         rep = packets_sub[packets_sub.date == int(date)]
                         feat.time_vect.append(rep[feat.attribute].item()
                                               if not rep.empty else np.nan)
@@ -213,7 +213,7 @@ def evaluation_ports(original_subnets):
                             mzscores_total[date] += feat.mzscores[date]
                 feat.to_write += ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n'
 
-        for feat in LIST_FEATURES:
+        for feat in FEATURES:
             with open(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
                                 N_MIN, N_DAYS, 'csv'), 'a') as file_feature:
                 file_feature.write(feat.to_write)
@@ -222,8 +222,8 @@ def evaluation_ports(original_subnets):
 def eval_scores():
     """ In evaluation ports files: convert anomalous subnets to
     number of anomalous subnets (= number of anomalies)"""
-    LIST_FEATURES.append(Feature('total'))
-    for feat, method in zip(LIST_FEATURES, METHODS):
+    FEATURES.append(Feature('total'))
+    for feat, method in zip(FEATURES, METHODS):
         ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
                                       T, N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
         # Lambda function to get the number of anomalies given a list of anomalous subnets

@@ -20,7 +20,7 @@ from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error
 
 from settings import *
-from features import LIST_FEATURES, LIST_FIGURES
+from features import FEATURES, FIGURES
 from full_detection import path_join, pre_computation, sign_to_score
 
 def plot_time_series(original_subnets):
@@ -40,10 +40,10 @@ def plot_time_series(original_subnets):
         # Plot only the results for the first ten ports
         for port in ports[:10]:
             packets_port = packets[packets.port == port]
-            for fig in LIST_FIGURES:
+            for fig in FIGURES:
                 if method == 'aggregated':
                     fig.reset_object()
-                    for date in dates:
+                    for date in DATES:
                         rep = packets_port[packets_port.date == int(date)]
                         fig.time_vect.append(rep[fig.attribute].item() if not rep.empty else np.nan)
                     if fig.attribute == 'nb_packets':
@@ -54,7 +54,7 @@ def plot_time_series(original_subnets):
                     fig.ax_a.set_xlabel('Time')
                     fig.ax_a.set_ylabel(' '.join([fig.legend, 'on port', str(port), 'aggregated']))
                     fig.ax_a.set_xticks(x)
-                    fig.ax_a.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), dates))
+                    fig.ax_a.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), DATES))
                     plt.setp(fig.ax_a.get_xticklabels(), rotation=45, ha='right',
                              rotation_mode='anchor')
                     lgd = fig.ax_a.legend()
@@ -65,7 +65,7 @@ def plot_time_series(original_subnets):
                 else:
                     for subnet in original_subnets:
                         fig.time_vect = []
-                        for date in dates:
+                        for date in DATES:
                             rep = packets_port[(packets_port.date == int(date))
                                                & (packets_port.key == subnet)]
                             fig.time_vect.append(rep[fig.attribute].item() if not rep.empty
@@ -78,7 +78,7 @@ def plot_time_series(original_subnets):
                     fig.ax.set_ylabel(' '.join([fig.legend, 'on port', str(port),
                                                 'not aggregated']))
                     fig.ax.set_xticks(x)
-                    fig.ax.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), dates))
+                    fig.ax.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), DATES))
                     plt.setp(fig.ax.get_xticklabels(), rotation=45, ha='right',
                              rotation_mode='anchor')
                     lgd = fig.ax.legend(handletextpad=0.1, labelspacing=0.24, loc='upper center',
@@ -93,13 +93,13 @@ def plot_time_series(original_subnets):
                     for i in range(N_DAYS, len(values)):
                         median = np.nanmedian(values[i - N_DAYS:i-1])
                         mad = np.nanmedian([np.abs(y - median) for y in values[i - N_DAYS:i-1]])
-                        fig.mzscores[dates[i]] = [0.6745 * (values[i] - median) / nad]
+                        fig.mzscores[DATES[i]] = [0.6745 * (values[i] - median) / nad]
                     ax_totake.plot(y, fig.mzscores.values(), label=subnet)
                 ax_totake.set_xlabel('Time')
                 ax_totake.set_ylabel(' '.join(['Moving Z-score for', fig.legend, 'on port',
                                                str(port), 'not aggregated']))
                 ax_totake.set_xticks(y)
-                ax_totake.set_xticklabels(map(lambda x: x[0:2] + '/' + x[2:], dates[N_DAYS:]))
+                ax_totake.set_xticklabels(map(lambda x: x[0:2] + '/' + x[2:], DATES[N_DAYS:]))
                 ax_totake.axhline(y=T, color='r')
                 ax_totake.axhline(y=-T, color='r')
                 ax_totake.text(18, T+0.1, 'T=' + str(T), color='r')
@@ -126,11 +126,11 @@ def compute_mse_feature(original_subnets):
         ports = packets_subnet.port.unique()
         for port in ports:
             packets_port = packets_subnet[packets_subnet.port == port]
-            for date in dates[:N_DAYS]:
+            for date in DATES[:N_DAYS]:
                 rep = packets_port[packets_port.date == int(date)]
-                for feat in LIST_FEATURES:
+                for feat in FEATURES:
                     feat.time_vect.append(rep[feat.attribute].item() if not rep.empty else np.nan)
-            for feat in LIST_FEATURES:
+            for feat in FEATURES:
                 vector = [feat.time_vect[i] for i in range(N_DAYS)
                           if not np.isnan(feat.time_vect[i])]
                 mu = np.nanmean(vector)
@@ -157,7 +157,7 @@ def compute_mse_feature(original_subnets):
                 feat.reset_object()
 
     fig_mse, ax_mse = plt.subplots()
-    for feat in LIST_FEATURES:
+    for feat in FEATURES:
         x_coordinates, y_coordinates = ecdf(feat.mse)
         ax_mse.plot(x_coordinates, y_coordinates, label=feat.attribute + ' ' +
                     str(np.round(np.nanmedian(feat.mse), 2)))
@@ -190,10 +190,10 @@ def correlation_features():
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
 
     for port, row in ports.iterrows():
-        for i, date in enumerate(dates[N_DAYS:]):
+        for i, date in enumerate(DATES[N_DAYS:]):
             if row[i] > T_ANO:
                 annotations = []
-                for feat in LIST_FEATURES:
+                for feat in FEATURES:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
                                                        N_DAYS, 'score', 'csv'), sep=';')
@@ -202,14 +202,13 @@ def correlation_features():
                                        if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annotations.append(annotations)
 
-    heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in ['+', '-']
-                                                      for feat in LIST_FEATURES])
+    heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in SIGNS
+                                                      for feat in FEATURES])
 
-    comb_features = list(combinations([feat.attribute for feat in LIST_FEATURES], 2))
-    signs = ['+', '-']
+    comb_features = list(combinations([feat.attribute for feat in FEATURES], 2))
     for feat_1, feat_2 in comb_features:
-        for sign_1 in signs:
-            for sign_2 in signs:
+        for sign_1 in SIGNS:
+            for sign_2 in SIGNS:
                 rho_s = spearmanr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])[0]
                 rho_p = pearsonr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])[0]
                 if rho_s > 0.5 or rho_p > 0.5:
