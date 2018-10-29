@@ -98,8 +98,7 @@ def heat_map_scores():
                     # text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
                 if i > 12:
                     color = 'white'
-                text = axis.text(j, i, int(data_annot[i, j]),
-                                 ha='center', va='center', color=color, size=8)
+                text = axis.text(j, i, int(data_annot[i, j]), fontdict=dict_font)
 
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)
@@ -117,17 +116,16 @@ def get_sum_string(element):
 def heatmap_anomalies():
     """Draw a better characterization of each major anomaly
     by providing the change in features this day."""
-    list_anomalies, list_annotations, labels = ([] for i in range(3))
+    l_anomalies, l_annot, labels = ([] for i in range(3))
     ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD,
                                         T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports_annot.applymap(sign_to_score)
-    ports = ports.loc[(ports > THRESHOLD_ANO).any(axis=1)]
+    ports = ports.loc[(ports > T_ANO).any(axis=1)]
 
     for index, row in ports.iterrows():
         for i, date in enumerate(DATES[N_DAYS:]):
-            if row[i] > THRESHOLD_ANO:
-                anomalies = []
-                annotations = []
+            if row[i] > T_ANO:
+                anomalies, annot = ([] for j in range(2))
                 labels.append('port ' + str(index) + '\non ' + date[0:2] + '/' + date[2:])
                 for feat in FEATURES:
                     if feat.attribute != 'nb_packets':
@@ -137,17 +135,14 @@ def heatmap_anomalies():
                         rep = evaluation[evaluation.port == index].loc[:, date]
                         anomalies.append(get_sum_string(rep.item()) if not rep.empty
                                          and str(rep.item() != 'nan') else 0)
-                        annotations.append(rep.item() if not rep.empty
+                        annot.append(rep.item() if not rep.empty
                                            and str(rep.item() != 'nan') else 0)
-                list_anomalies.append(anomalies)
-                list_annotations.append(annotations)
+                l_anomalies.append(anomalies)
+                l_annot.append(annot)
 
-    columns = [feat.attribute for feat in FEATURES if feat.attribute != 'nb_packets']
-    heatmap = pd.DataFrame(list_anomalies, columns=columns, index=labels)
-    heatmap_annot = pd.DataFrame(list_annotations, columns=columns, index=labels)
-
-    data = np.array(heatmap)
-    data_annot = np.array(heatmap_annot)
+    col = [feat.attribute for feat in FEATURES if feat.attribute != 'nb_packets']
+    heatmap, heatmap_annot = [pd.DataFrame(l, columns=col, index=labels) for l in [l_anomalies, l_annot]]
+    data, data_annot = [np.array(hm) for hm in [heatmap, heatmap_annot]]
 
     fig, axis = plt.subplots()
     image = axis.imshow(data, cmap='YlOrRd', aspect=.45)
@@ -170,45 +165,43 @@ def heatmap_anomalies():
     axis.tick_params(which='minor', bottom=False, left=False)
 
     axis.set_yticklabels(labels)
-    axis.set_xticklabels(columns)
+    axis.set_xticklabels(col)
 
-    # Loop over data dimensions and create text annotations.
-    for i, j in zip([(range(0, data.shape[i]) for i in range(2))]):
-        annot = str(data_annot[i, j]).split(',')
-        if len(annot) == 1:
-            text = axis.text(j, i, '0',
-                             ha='center', va='center', color='black', size=10)
-        else:
-            if '0' in annot[0]:
-                if '0' in annot[1]:
-                    text = axis.text(j, i, '0', ha='center', va='center',
-                                     color='black', size=10)
-                else:
-                    text = axis.text(j, i, annot[1], ha='center', va='center',
-                                     color=choose_color(annot[1]), size=10)
+    dict_font = dict(ha='center', va='center', size=10)
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            annot = str(data_annot[i, j]).split(',')
+            if len(annot) == 1:
+                text = axis.text(j, i, '0', color='black', fontdict=dict_font)
             else:
-                if '0' in annot[1]:
-                    text = axis.text(j, i, annot[0], ha='center', va='center',
-                                     color=choose_color(annot[0]), size=10)
+                if '0' in annot[0]:
+                    if '0' in annot[1]:
+                        text = axis.text(j, i, '0', color='black', fontdict=dict_font)
+                    else:
+                        text = axis.text(j, i, annot[1], color=color(annot[1]),
+                                         fontdict=dict_font)
                 else:
-                    text = axis.text(j, i-0.18, annot[0], ha='center', va='center',
-                                     color=choose_color(annot[0]), size=10)
-                    text = axis.text(j, i+0.18, annot[1], ha='center', va='center',
-                                     color=choose_color(annot[1]), size=10)
+                    if '0' in annot[1]:
+                        text = axis.text(j, i, annot[0], color=color(annot[0]),
+                                         fontdict=dict_font)
+                    else:
+                        text = axis.text(j, i-0.18, annot[0], color=color(annot[0]),
+                                         fontdict=dict_font)
+                        text = axis.text(j, i+0.18, annot[1], color=color(annot[1]),
+                                         fontdict=dict_font)
 
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)
+    plt.show()
     fig.savefig(path_join(PATH_FIGURES, 'heatmap_anomalies', T, N_MIN,
                           N_DAYS, PERIOD, 'png'), dpi=600, bbox_inches='tight')
 
-def choose_color(pos):
-    """Choose color of heatmap annotation (black or white) based on the color of the square."""
-    if int(pos[1:]) > 6:
-        return 'white'
-    return 'black'
+def color(pos):
+    """Choose color of heatmap annotation based on the square color."""
+    return 'white' if int(pos[1:]) > 6 else 'black'
 
 def main(argv):
-    heat_map_scores()
+    # heat_map_scores()
     # heatmap_anomalies()
     return 0
 

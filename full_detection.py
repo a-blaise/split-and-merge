@@ -130,8 +130,7 @@ def compute_subnets(original_subnets, sub_df):
                                                                              daily_subnets))
                     chunk = chunk.dropna(subset=['subnet'])
                     for sub in chunk['subnet'].unique():
-                        packets = chunk.loc[chunk['subnet'] == sub]
-                        compute_metrics(files, packets, date, sub)
+                        compute_metrics(files, chunk.loc[chunk['subnet'] == sub], date, sub)
             break
 
 def evaluation_ports(original_subnets):

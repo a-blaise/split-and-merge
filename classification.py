@@ -25,10 +25,10 @@ class Anomaly:
         self.date = date
 
 class Class_anomaly():
-    def __init__(self, description, characs, *antecedent):
+    def __init__(self, description, characs, *ant):
         self.description = description
         self.features = characs
-        self.antecedent = antecedent if antecedent else None
+        self.antecedent = ant if ant else None
         self.anomalies = pd.DataFrame()
 
 def clustering_anomalies():
@@ -59,7 +59,6 @@ def clustering_anomalies():
     heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
 
     epsilon = 2.88
-    # Set all vectors to the same scale
     heatmap_fit = StandardScaler().fit_transform(heatmap)
     dbscan = DBSCAN(eps=epsilon, min_samples=1).fit(heatmap_fit)
     labels = dbscan.labels_
@@ -113,8 +112,7 @@ def classify_anomalies(classes):
             cl.anomalies = temp
         indices = list(cl.anomalies.index)
         if indices:
-            for ind in indices:
-                heatmap.rename(index={ind: cl.description}, inplace=True)
+            each(lambda x: heatmap.rename(index={x: cl.description}, inplace=True), indices)
 
     print(heatmap)
 
