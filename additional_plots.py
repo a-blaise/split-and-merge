@@ -21,7 +21,6 @@ from sklearn.metrics import mean_squared_error
 
 from settings import *
 from features import FEATURES, FIGURES
-from full_detection import path_join, pre_computation, sign_to_score
 
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
@@ -197,7 +196,7 @@ def correlation_features():
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
                                                        N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == port].loc[:, date]
+                    rep = evaluation[evaluation.port == port][date]
                     annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)]
                                        if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annotations.append(annotations)
@@ -209,17 +208,91 @@ def correlation_features():
     for feat_1, feat_2 in comb_features:
         for sign_1 in SIGNS:
             for sign_2 in SIGNS:
-                rho_s = spearmanr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])[0]
-                rho_p = pearsonr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])[0]
-                if rho_s > 0.5 or rho_p > 0.5:
-                    print(sign_1 + feat_1, sign_2 + feat_2, rho_s, rho_p)
+                rho_s, p_s = spearmanr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
+                rho_p, p_p = pearsonr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
+                if rho_s > 0.5:
+                    print(sign_1 + feat_1, sign_2 + feat_2, rho_s)
+
+def cor_features_output():
+    feat_df = dict.fromkeys([feat.attribute for feat in FEATURES], pd.DataFrame())
+    for feat in FEATURES:
+        ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD,
+                                      T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+        feat_df[feat.attribute] = ports.applymap(sign_to_score)
+
+    list_combinations = [FEATURES]
+    for feat in FEATURES:
+        temp = FEATURES[:]
+        temp.remove(feat)
+        list_combinations.append(temp)
+
+    threshold_anomalies = dict.fromkeys([str(l) for l in list_combinations], [])
+    all_anomalies = dict.fromkeys([str(l) for l in list_combinations], [])
+
+    for l in list_combinations:
+        result = pd.DataFrame()
+        for feat in l:
+            result = result.add(feat_df[feat.attribute], fill_value=0)
+        result = result.astype(int)
+        ind_thr, ind_all = ([] for i in range(2))
+        for port, row in result.iterrows():
+            for i, date in enumerate(DATES[N_DAYS:]):
+                ind_all.append('|'.join([str(port), date, str(row[i])]))
+                if row[i] > T_ANO:
+                   ind_thr.append('|'.join([str(port), date, str(row[i])]))
+        threshold_anomalies[str(l)] = ind_thr
+        all_anomalies[str(l)] = ind_all
+
+    unique_anomalies = set(['|'.join(el.split('|')[:-1]) for threshold
+                            in threshold_anomalies.values() for el in threshold])
+
+    final_array = pd.DataFrame(index=unique_anomalies, columns=[str(l) for l in list_combinations],
+                               dtype=np.int8)
+    for value in unique_anomalies:
+        for l in list_combinations:
+            for anomaly in all_anomalies[str(l)]:
+                if value in anomaly:
+                    final_array.loc[value, str(l)] = int(anomaly.split('|')[2])
+                    break
+            else:
+                final_array.loc[value, str(l)] = 0
+
+    fig, axis = plt.subplots()
+    final = np.array(final_array, dtype=int)
+    image = axis.imshow(final, cmap='YlOrRd')
+
+    axis.set_xticks(np.arange(len(list_combinations)))
+    axis.set_yticks(np.arange(len(unique_anomalies)))
+
+    labels = ['all']
+    labels.extend([feat.attribute for feat in FEATURES])
+    axis.set_xticklabels(labels)
+    axis.set_yticklabels([an.split('|')[0] + ' - ' + an.split('|')[1][0:2] + '/'
+                          + an.split('|')[1][2:] for an in unique_anomalies])
+    axis.tick_params(axis='both', which='major', labelsize=7)
+    plt.setp(axis.get_xticklabels(), rotation=35, ha='right',
+             rotation_mode='anchor')
+
+    for i in range(len(unique_anomalies)):
+        for j in range(len(list_combinations)):
+            color = 'b' if final[i, j] > T_ANO else 'c'
+            text = axis.text(j, i, final[i, j], ha='center', va='center', color=color, size=7)
+
+    axis.set_title('Intensity of anomalies with features varying', size=9)
+    fig.savefig(path_join(PATH_FIGURES, 'cor_features', T, N_MIN, N_DAYS, PERIOD, 'png'),
+                dpi=600, bbox_inches='tight')
+
+    for i, l in enumerate(list_combinations[1:]):
+        rho_s, p_s = [round(val * 100, 1) for val in spearmanr(final_array.iloc[:, 0], final_array[str(l)])]
+        print(labels[i+1], rho_s)
 
 def main(argv):
-    original_subnets, sub_df, subnets = pre_computation()
+    # original_subnets, sub_df, subnets = pre_computation()
 
-    plot_time_series(original_subnets)
-    compute_mse_feature(original_subnets)
+    # plot_time_series(original_subnets)
+    # compute_mse_feature(original_subnets)
     correlation_features()
+    # cor_features_output()
     return 0
 
 if __name__ == '__main__':

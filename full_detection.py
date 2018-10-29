@@ -18,32 +18,6 @@ import ipaddress
 from settings import *
 from features import Feature, FEATURES
 
-def path_join(*parts):
-    return parts[0] + '_'.join(map(str, parts[1:-1])) + '.' + parts[-1]
-
-def pre_computation():
-    sub_df = pd.read_csv(path_join(PATH_SUBNETS, 'subnets', PERIOD, 'csv'), dtype={'date': str})
-    original_subnets = sub_df.columns[1:].tolist()
-
-    # Add last months of 2017 if 2018 period
-    if PERIOD == 2018:
-        sub_df = sub_df.append(pd.read_csv(path_join(PATH_SUBNETS, 'subnets_2017',
-                                                     'csv'), dtype={'date': str}))
-
-    subnets = dict.fromkeys(original_subnets, {})
-    for subnet, date in zip(original_subnets, sub_df['date']):
-        new_subnet = sub_df[sub_df.date == date][subnet].item()
-        subnets[subnet][str(new_subnet) + '-' + date] = pd.DataFrame()
-
-    return original_subnets, sub_df, subnets
-
-def sign_to_score(row):
-    """Lambda function to sum up too values into a total score."""
-    if isinstance(row, str):
-        nbs = row.split(',')
-        return int(nbs[0]) + int(nbs[1][1:])
-    return 0
-
 def check_orphans(row, daily_subnets):
     """Check which packets do not belong to any identified MAWI subnetwork
     (neither source IP nor destination IP)."""
@@ -170,9 +144,7 @@ def evaluation_ports(original_subnets):
                               dtype={'nb_packets': int})
         packets = packets[packets.nb_packets > N_MIN]
         subnets = original_subnets if method == 'separated' else ['all']
-
-        for feat in FEATURES:
-            feat.to_write = 'port;' + ';'.join(DATES[N_DAYS:]) + '\n'
+        each(lambda x: x.to_write = 'port;' + ';'.join(DATES[N_DAYS:]) + '\n', FEATURES)
 
         if not os.path.exists(PATH_EVAL):
             os.mkdir(PATH_EVAL)

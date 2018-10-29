@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 
 from settings import *
 from features import FEATURES
-from full_detection import path_join, sign_to_score
 
 def value_to_yaxis(value):
     """Lambda function to replace each non-zero value by its y-number."""
@@ -70,33 +69,33 @@ def heat_map_scores():
                     text = axis.text(j+0.55, i-0.13, port, color=color, size=6.5)
                     text = axis.text(j+0.55, i+0.45, per, color=color, size=6.5)
 
-                    props = dict(width=0.1, headlength=4, headwidth=5,
-                                 facecolor='black', shrink=0.05)
-                    axis.annotate('ADB exploit', xy=(6, 15.5), xytext=(4, 17.5), arrowprops=props)
-                    text = axis.text(4, 18.2, 'port 5555 - 0.1 %', color=color, size=7)
-                    axis.annotate('Exploit', xy=(10, 13.5), xytext=(8.5, 12), arrowprops=props)
-                    text = axis.text(8.5, 12.5, 'port 7001 - <0.1 %', color='black', size=6.5)
-                    axis.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.8),
-                                  arrowprops=props)
-                    text = axis.text(11.5, 15.5, 'port 2000 - 0.3 %', color=color, size=7)
-                    axis.annotate('Hajime scan', xy=(13.5, 18), xytext=(15, 17.5),
-                                  arrowprops=props)
-                    text = axis.text(15, 18.2, 'port 8291 - <0.1 %', color=color, size=7)
-                    axis.annotate('Exploit', xy=(0, 14.5), xytext=(0, 16.5),
-                                  arrowprops=props)
-                    text = axis.text(0, 17, 'port 2222 - 0.1 %', color='black', size=6.5)
-                    axis.annotate('Scan break', xy=(16.5, 16), xytext=(18, 15.5),
-                                  arrowprops=props)
-                    text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
-                    axis.annotate('Scan break', xy=(17.5, 15), xytext=(18, 15.5),
-                                  arrowprops=props)
-                    text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
-                    axis.annotate('Massive scan', xy=(5, 14.5), xytext=(5.6, 12.5),
-                                  arrowprops=props)
-                    text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
-                    axis.annotate('Massive scan', xy=(9, 15.5), xytext=(5.6, 12.5),
-                                  arrowprops=props)
-                    text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
+                    # props = dict(width=0.1, headlength=4, headwidth=5,
+                    #              facecolor='black', shrink=0.05)
+                    # axis.annotate('ADB exploit', xy=(6, 15.5), xytext=(4, 17.5), arrowprops=props)
+                    # text = axis.text(4, 18.2, 'port 5555 - 0.1 %', color=color, size=7)
+                    # axis.annotate('Exploit', xy=(10, 13.5), xytext=(8.5, 12), arrowprops=props)
+                    # text = axis.text(8.5, 12.5, 'port 7001 - <0.1 %', color='black', size=6.5)
+                    # axis.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.8),
+                    #               arrowprops=props)
+                    # text = axis.text(11.5, 15.5, 'port 2000 - 0.3 %', color=color, size=7)
+                    # axis.annotate('Hajime scan', xy=(13.5, 18), xytext=(15, 17.5),
+                    #               arrowprops=props)
+                    # text = axis.text(15, 18.2, 'port 8291 - <0.1 %', color=color, size=7)
+                    # axis.annotate('Exploit', xy=(0, 14.5), xytext=(0, 16.5),
+                    #               arrowprops=props)
+                    # text = axis.text(0, 17, 'port 2222 - 0.1 %', color='black', size=6.5)
+                    # axis.annotate('Scan break', xy=(16.5, 16), xytext=(18, 15.5),
+                    #               arrowprops=props)
+                    # text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
+                    # axis.annotate('Scan break', xy=(17.5, 15), xytext=(18, 15.5),
+                    #               arrowprops=props)
+                    # text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
+                    # axis.annotate('Massive scan', xy=(5, 14.5), xytext=(5.6, 12.5),
+                    #               arrowprops=props)
+                    # text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
+                    # axis.annotate('Massive scan', xy=(9, 15.5), xytext=(5.6, 12.5),
+                    #               arrowprops=props)
+                    # text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
                 if i > 12:
                     color = 'white'
                 text = axis.text(j, i, int(data_annot[i, j]),
@@ -150,7 +149,6 @@ def heatmap_anomalies():
     data = np.array(heatmap)
     data_annot = np.array(heatmap_annot)
 
-    # Plot
     fig, axis = plt.subplots()
     image = axis.imshow(data, cmap='YlOrRd', aspect=.45)
 
@@ -162,7 +160,6 @@ def heatmap_anomalies():
     axis.set_yticklabels(labels)
     axis.set_xticklabels(['srcDivInd', 'dstDivInd', 'portDivInd', 'meanSize', 'stdSize', 'perSyn'])
 
-    # Rotate the tick labels and set their alignment.
     plt.setp(axis.get_xticklabels(), rotation=20, ha='right', rotation_mode='anchor')
 
     for edge, spine in axis.spines.items():

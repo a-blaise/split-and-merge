@@ -18,7 +18,6 @@ from matplotlib.ticker import MaxNLocator
 
 from settings import *
 from features import FEATURES
-from full_detection import path_join, pre_computation
 
 class Anomaly:
     def __init__(self, port, date):
@@ -32,9 +31,8 @@ def anomalies_ndays(subnets, nb_days):
     ports = packets.port.unique()
   
     # Compute anomalies by varying the number of days in the model
-    files = {}
-    for nb_day in nb_days:
-        files[nb_day] = open(path_join(PATH_EVAL, 'anomalies', 'N_DAYS', PERIOD, nb_day, 'txt'), 'a')
+    files = dict.fromkeys(nb_days, [open(path_join(PATH_EVAL, 'anomalies', 'N_DAYS', PERIOD,
+                                         nb_day, 'txt'), 'a') for nb_day in nb_days])
 
     for port in ports:
         packets_port = packets[packets.port == port]
@@ -66,9 +64,8 @@ def anomalies_ndays(subnets, nb_days):
             files[n_day].write(new_id + '|' + str(nb_occur) + ',')
 
 def anomalies_nmins(subnets, nb_mins):
-    files = {}
-    for nb_min in nb_mins:
-        files[nb_min] = open(path_join(PATH_EVAL, 'anomalies', 'N_MINS', PERIOD, nb_min, 'txt'), 'a')
+    files = dict.fromkeys(nb_mins, [open(path_join(PATH_EVAL, 'anomalies', 'N_MIN', PERIOD,
+                                         nb_min, 'txt'), 'a') for nb_min in nb_mins])
 
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
                           dtype={'nb_packets': int})
@@ -118,7 +115,7 @@ def plot_results(type_comparison, intervals):
 
     fig, axis = plt.subplots()
     axis.yaxis.set_major_locator(MaxNLocator(integer=True))
-    bin_width = 4 if type_comparison == 'N_MINS' else 0.8
+    bin_width = 4 if type_comparison == 'N_MIN' else 0.8
     axis.bar(intervals, list(nb_anomalies.values()), width=bin_width)
     axis.set_xticks(intervals)
     axis.set_xlabel('Number of days in the model (N_DAYS)' if type_comparison == 'N_DAYS'
@@ -147,7 +144,7 @@ def comparison(type_comparison, baseline, intervals):
                           if interval != baseline else 0)
 
     fig, axis = plt.subplots()
-    bin_width = 4 if type_comparison == 'N_MINS' else 0.8
+    bin_width = 4 if type_comparison == 'N_MIN' else 0.8
     axis.bar(intervals, list_over, width=bin_width)
     axis.bar(intervals, list_under, width=bin_width)
     axis.set_xticks(intervals)
@@ -162,18 +159,17 @@ def accurate_comparison(type_comparison, intervals):
     threshold_anomalies = dict.fromkeys(intervals, [])
 
     for interval in intervals:
-        file = open(path_join(PATH_EVAL, 'anomalies', PERIOD, type_comparison, interval,
-                              T_ANO, 'txt'), 'r')
+        file = open(path_join(PATH_EVAL, 'anomalies', type_comparison, PERIOD, 
+                              interval, 'txt'), 'r')
         anomalies = file.read().split(',')[:-1]
         file.close()
         all_anomalies[interval] = anomalies
         threshold_anomalies[interval] = list(filter(lambda a: int(a.split('|')[2]) > T_ANO,
                                                     anomalies))
+        print(all_anomalies)
 
-    unique_anomalies = []
-    for threshold in threshold_anomalies.values():
-        unique_anomalies.extend('|'.join(el.split('|')[:-1]) for el in threshold)
-    unique_anomalies = set(unique_anomalies)
+    unique_anomalies = set(['|'.join(el.split('|')[:-1]) for threshold
+                            in threshold_anomalies.values() for el in threshold])
 
     final_array = pd.DataFrame(index=unique_anomalies, columns=intervals, dtype=np.int8)
     for value in unique_anomalies:
@@ -197,19 +193,15 @@ def accurate_comparison(type_comparison, intervals):
     axis.set_xticklabels(intervals)
     axis.set_yticklabels([an.split('|')[0] + ' - ' + an.split('|')[1][0:2] + '/'
                           + an.split('|')[1][2:] for an in unique_anomalies])
-    axis.tick_params(axis='both', which='major', labelsize=7)
+    axis.tick_params(axis='both', which='major', labelsize=5)
 
     for i in range(len(unique_anomalies)):
         for j in range(len(intervals)):
-            if final[i, j] > T_ANO:
-                color = "b"
-            else:
-                color = "c"
-            text = axis.text(j, i, final[i, j], ha="center", va="center", color=color, size=7)
+            color = 'b' if final[i, j] > T_ANO else 'c'
+            text = axis.text(j, i, final[i, j], ha='center', va='center', color=color, size=5)
 
-    axis.set_title('Intensity of anomalies with N_DAYS varying', size=9)
-    fig.savefig(path_join(PATH_FIGURES, 'comparison', T, N_MIN, N_DAYS, PERIOD, 'png'),
-                dpi=600, bbox_inches='tight')
+    axis.set_title('Intensity of anomalies with ' + type_comparison + ' varying', size=7)
+    # fig.savefig(path_join(PATH_FIGURES, 'comparison', type_comparison, PERIOD, T_ANO, 'png'), dpi=600)
 
 def additional_infos(subnets, nb_days):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
@@ -222,17 +214,14 @@ def additional_infos(subnets, nb_days):
                  Anomaly(443, '0908'), Anomaly(443, '0929'), Anomaly(587, '1020'), Anomaly(2323, '0916'),
                  Anomaly(3389, '0929'), Anomaly(8000, '0922')]
 
-    # anomalies = [Anomaly(2323, '0901'), Anomaly(2323, '0908'), Anomaly(2323, '0915')]
     for an in anomalies:
         port = an.port
         date_an = an.date
-        for feat in FEATURES:
-            feat.reset_object()
+        each(lambda x: x.reset_object(), FEATURES)
         for subnet in subnets:
             for date in DATES:
                 rep = packets[(packets.date == int(date)) & (packets.key == subnet) & (packets.port == port)]
-                for feat in FEATURES:
-                    feat.time_vect.append(rep[feat.attribute].item() if not rep.empty else np.nan)
+                each(lambda x: x.time_vect.append(rep[x.attribute].item() if not rep.empty else np.nan), FEATURES)
 
             for feat in FEATURES:
                 feat.sub_time_vect[subnet] = feat.time_vect[:]
@@ -264,15 +253,15 @@ def main(argv):
     nb_mins = [20, 35, 50, 65, 80, 100]
 
     # anomalies_ndays(subnets, nb_days)
-    anomalies_nmins(subnets, nb_mins)
+    # anomalies_nmins(subnets, nb_mins)
 
     baseline_day = 10
     baseline_min = 20
 
     # plot_results('N_DAYS', nb_days)
     # comparison('N_DAYS', baseline_day, nb_days)
-    # comparison('N_MINS', baseline_min, nb_mins)
-    # accurate_comparison('N_DAYS', nb_days)
+    # comparison('N_MIN', baseline_min, nb_mins)
+    accurate_comparison('N_DAYS', nb_days)
     # additional_infos(subnets, nb_days)
 
 if __name__ == '__main__':

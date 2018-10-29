@@ -18,7 +18,6 @@ from sklearn.preprocessing import StandardScaler
 
 from settings import *
 from features import FEATURES
-from full_detection import path_join, sign_to_score, pre_computation
 
 class Anomaly:
     def __init__(self, port, date):
@@ -34,7 +33,6 @@ class Class_anomaly():
 
 def clustering_anomalies():
     list_annot = []
-
     ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
                                         N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports_annot.applymap(sign_to_score)
@@ -48,7 +46,7 @@ def clustering_anomalies():
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
                                                        N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == index].loc[:, date]
+                    rep = evaluation[evaluation.port == index][date]
                     annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)]
                                        if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annot.append(annotations)
@@ -57,7 +55,6 @@ def clustering_anomalies():
                                                 for sign in SIGNS])
 
     # to_drop = ['nb_packets', 'SYN', 'port_div_index']
-    
     to_drop = ['nb_packets']
     heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
 
@@ -85,7 +82,7 @@ def classify_anomalies(classes):
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
                                                        N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == index].loc[:, date]
+                    rep = evaluation[evaluation.port == index][date]
                     annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
                                        if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annot.append(annotations)
@@ -130,13 +127,12 @@ def additional_infos(subnets):
     for an in anomalies:
         port = an.port
         date_an = an.date
-        for feat in FEATURES:
-            feat.reset_object()
+        each(lambda x: x.reset_object(), FEATURES)
+
         for subnet in subnets:
             for date in DATES:
                 rep = packets[(packets.date == int(date)) & (packets.key == subnet) & (packets.port == port)]
-                for feat in FEATURES:
-                    feat.time_vect.append(rep[feat.attribute].item() if not rep.empty else np.nan)
+                each(lambda x: x.time_vect.append(rep[x.attribute].item() if not rep.empty else np.nan), FEATURES)
 
             for feat in FEATURES:
                 feat.sub_time_vect[subnet] = feat.time_vect[:]
