@@ -21,6 +21,7 @@ from sklearn.metrics import mean_squared_error
 
 from settings import *
 from features import FEATURES, FIGURES
+from full_detection import path_join, pre_computation, sign_to_score
 
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
@@ -196,7 +197,7 @@ def correlation_features():
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
                                                        N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == port][date]
+                    rep = evaluation[evaluation.port == port].loc[:, date]
                     annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)]
                                        if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
                 list_annotations.append(annotations)
@@ -210,8 +211,9 @@ def correlation_features():
             for sign_2 in SIGNS:
                 rho_s, p_s = spearmanr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
                 rho_p, p_p = pearsonr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
-                if rho_s > 0.5:
-                    print(sign_1 + feat_1, sign_2 + feat_2, rho_s)
+                if np.abs(rho_s) > 0.75:
+                    print(sign_1 + feat_1, sign_2 + feat_2, round(rho_s * 100, 1))
+                    # print(heatmap[sign_1 + feat_1].tolist(), heatmap[sign_2 + feat_2].tolist())
 
 def cor_features_output():
     feat_df = dict.fromkeys([feat.attribute for feat in FEATURES], pd.DataFrame())
@@ -220,16 +222,14 @@ def cor_features_output():
                                       T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
         feat_df[feat.attribute] = ports.applymap(sign_to_score)
 
-    list_combinations = [FEATURES]
+    combinations = [FEATURES]
     for feat in FEATURES:
         temp = FEATURES[:]
         temp.remove(feat)
-        list_combinations.append(temp)
+        combinations.append(temp)
 
-    threshold_anomalies = dict.fromkeys([str(l) for l in list_combinations], [])
-    all_anomalies = dict.fromkeys([str(l) for l in list_combinations], [])
-
-    for l in list_combinations:
+    threshold_ano, all_ano = (dict.fromkeys([str(l) for l in combinations], []) for i in range(2))
+    for l in combinations:
         result = pd.DataFrame()
         for feat in l:
             result = result.add(feat_df[feat.attribute], fill_value=0)
@@ -240,17 +240,15 @@ def cor_features_output():
                 ind_all.append('|'.join([str(port), date, str(row[i])]))
                 if row[i] > T_ANO:
                    ind_thr.append('|'.join([str(port), date, str(row[i])]))
-        threshold_anomalies[str(l)] = ind_thr
-        all_anomalies[str(l)] = ind_all
+        threshold_ano[str(l)] = ind_thr
+        all_ano[str(l)] = ind_all
 
-    unique_anomalies = set(['|'.join(el.split('|')[:-1]) for threshold
-                            in threshold_anomalies.values() for el in threshold])
-
-    final_array = pd.DataFrame(index=unique_anomalies, columns=[str(l) for l in list_combinations],
+    unique_ano = set(['|'.join(el.split('|')[:-1]) for thr in threshold_ano.values() for el in thr])
+    final_array = pd.DataFrame(index=unique_ano, columns=[str(l) for l in combinations],
                                dtype=np.int8)
-    for value in unique_anomalies:
-        for l in list_combinations:
-            for anomaly in all_anomalies[str(l)]:
+    for value in unique_ano:
+        for l in combinations:
+            for anomaly in all_ano[str(l)]:
                 if value in anomaly:
                     final_array.loc[value, str(l)] = int(anomaly.split('|')[2])
                     break
@@ -261,20 +259,20 @@ def cor_features_output():
     final = np.array(final_array, dtype=int)
     image = axis.imshow(final, cmap='YlOrRd')
 
-    axis.set_xticks(np.arange(len(list_combinations)))
-    axis.set_yticks(np.arange(len(unique_anomalies)))
+    axis.set_xticks(np.arange(len(combinations)))
+    axis.set_yticks(np.arange(len(unique_ano)))
 
     labels = ['all']
     labels.extend([feat.attribute for feat in FEATURES])
     axis.set_xticklabels(labels)
     axis.set_yticklabels([an.split('|')[0] + ' - ' + an.split('|')[1][0:2] + '/'
-                          + an.split('|')[1][2:] for an in unique_anomalies])
+                          + an.split('|')[1][2:] for an in unique_ano])
     axis.tick_params(axis='both', which='major', labelsize=7)
     plt.setp(axis.get_xticklabels(), rotation=35, ha='right',
              rotation_mode='anchor')
 
-    for i in range(len(unique_anomalies)):
-        for j in range(len(list_combinations)):
+    for i in range(len(unique_ano)):
+        for j in range(len(combinations)):
             color = 'b' if final[i, j] > T_ANO else 'c'
             text = axis.text(j, i, final[i, j], ha='center', va='center', color=color, size=7)
 
@@ -282,7 +280,7 @@ def cor_features_output():
     fig.savefig(path_join(PATH_FIGURES, 'cor_features', T, N_MIN, N_DAYS, PERIOD, 'png'),
                 dpi=600, bbox_inches='tight')
 
-    for i, l in enumerate(list_combinations[1:]):
+    for i, l in enumerate(combinations[1:]):
         rho_s, p_s = [round(val * 100, 1) for val in spearmanr(final_array.iloc[:, 0], final_array[str(l)])]
         print(labels[i+1], rho_s)
 

@@ -108,10 +108,11 @@ def plot_results(type_comparison, intervals):
     nb_anomalies = dict.fromkeys(intervals, 0)
 
     for interval in intervals:
-        files[interval] = open(path_join(PATH_EVAL, 'anomalies', PERIOD, type_comparison, interval, 'txt'), 'r')
-        elements = files[interval].read()
+        files[interval] = open(path_join(PATH_EVAL, 'anomalies', type_comparison, PERIOD, interval, 'txt'), 'r')
+        elements = files[interval].read().split(',')[:-1]
         files[interval].close()
-        nb_anomalies[interval] = len(elements.split(','))
+        elements = list(filter(lambda an: int(an.split('|')[2]) > T_ANO, elements))
+        nb_anomalies[interval] = len(elements)
 
     fig, axis = plt.subplots()
     axis.yaxis.set_major_locator(MaxNLocator(integer=True))
@@ -128,10 +129,10 @@ def comparison(type_comparison, baseline, intervals):
     anomalies = dict.fromkeys(intervals, {})
 
     for interval in intervals:
-        files[interval] = open(path_join(PATH_EVAL, 'anomalies', PERIOD, type_comparison, interval, 'txt'), 'r')
-        elements = files[interval].read()
+        files[interval] = open(path_join(PATH_EVAL, 'anomalies', type_comparison, PERIOD, interval, 'txt'), 'r')
+        elements = files[interval].read().split(',')[:-1]
         files[interval].close()
-        anomalies[interval] = elements.split(',')
+        anomalies[interval] = list(filter(lambda an: int(an.split('|')[2]) > T_ANO, elements))
 
     # Compare anomalies seen for each day with the baseline
     baseline_anomalies = anomalies[baseline] # list of anomalies
@@ -162,11 +163,11 @@ def accurate_comparison(type_comparison, intervals):
         file = open(path_join(PATH_EVAL, 'anomalies', type_comparison, PERIOD, 
                               interval, 'txt'), 'r')
         anomalies = file.read().split(',')[:-1]
+        anomalies = list(filter(lambda a: DATES.index(a.split('|')[1]) > len(DATES) - LEN_PERIOD, anomalies))
         file.close()
         all_anomalies[interval] = anomalies
         threshold_anomalies[interval] = list(filter(lambda a: int(a.split('|')[2]) > T_ANO,
                                                     anomalies))
-        print(all_anomalies)
 
     unique_anomalies = set(['|'.join(el.split('|')[:-1]) for threshold
                             in threshold_anomalies.values() for el in threshold])
@@ -201,7 +202,7 @@ def accurate_comparison(type_comparison, intervals):
             text = axis.text(j, i, final[i, j], ha='center', va='center', color=color, size=5)
 
     axis.set_title('Intensity of anomalies with ' + type_comparison + ' varying', size=7)
-    # fig.savefig(path_join(PATH_FIGURES, 'comparison', type_comparison, PERIOD, T_ANO, 'png'), dpi=600)
+    fig.savefig(path_join(PATH_FIGURES, 'comparison', type_comparison, PERIOD, T_ANO, 'png'), dpi=600)
 
 def additional_infos(subnets, nb_days):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
@@ -258,10 +259,10 @@ def main(argv):
     baseline_day = 10
     baseline_min = 20
 
-    # plot_results('N_DAYS', nb_days)
-    # comparison('N_DAYS', baseline_day, nb_days)
-    # comparison('N_MIN', baseline_min, nb_mins)
-    accurate_comparison('N_DAYS', nb_days)
+    plot_results('N_MIN', nb_mins)
+    comparison('N_DAYS', baseline_day, nb_days)
+    comparison('N_MIN', baseline_min, nb_mins)
+    # accurate_comparison('N_MIN', nb_mins)
     # additional_infos(subnets, nb_days)
 
 if __name__ == '__main__':

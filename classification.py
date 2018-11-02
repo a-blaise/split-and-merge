@@ -93,6 +93,7 @@ def classify_anomalies(classes):
     to_drop = ['nb_packets', 'SYN']
     heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
 
+    dict_categories = dict.fromkeys(range(len(heatmap.values)), '')
     for cl in classes:
         temp = heatmap.copy()
         for feat in cl.features:
@@ -100,7 +101,7 @@ def classify_anomalies(classes):
             temp = temp.loc[temp[feat] > 0]
             temp = temp.loc[temp[contrary_feat] == 0]
         
-        ant = [cla.anomalies for cla in classes if cla.description == 'botnet scan'][0]
+        ant = [cla.anomalies for cla in classes if cla.description == 'Botnet scan'][0]
         if cl.antecedent:
             for cur_row in temp.iterrows():
                 for ant_row in ant.iterrows():
@@ -110,10 +111,26 @@ def classify_anomalies(classes):
                 cl.anomalies = cl.anomalies.drop_duplicates()
         else:
             cl.anomalies = temp
+
         indices = list(cl.anomalies.index)
         if indices:
-            each(lambda x: heatmap.rename(index={x: cl.description}, inplace=True), indices)
+            for ind in indices:
+                new_index = cl.description
+                if type(ind) == int:
+                    if heatmap.iloc[ind]['+port_div_index'] > 0 and heatmap.iloc[ind]['-port_div_index'] == 0:
+                        new_index += ' - not spoofed port'
+                    if heatmap.iloc[ind]['-port_div_index'] > 0 and heatmap.iloc[ind]['+port_div_index'] == 0:
+                        new_index += ' - spoofed port'
+                dict_categories[ind] = new_index
+                # heatmap.rename(index={ind: new_index}, inplace=True)
 
+    for cl in classes:
+        heatmap.rename(index=dict_categories, inplace=True)
+    heatmap = heatmap.rename(index=str, columns={"-src_div_index": "-src", "+src_div_index": "+src",
+                                                 "-dst_div_index": "-dst", "+dst_div_index": "+dst",
+                                                 "-port_div_index": "-port", "+port_div_index": "+port",
+                                                 "-mean_size": "-meanSz", "+mean_size": "+meanSz",
+                                                 "-std_size": "-stdSz", "+std_size": "+stdSz"})
     print(heatmap)
 
 def additional_infos(subnets):
@@ -156,10 +173,13 @@ def additional_infos(subnets):
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
-    classes = [Class_anomaly('scan from a single source', ['-src_div_index', '+dst_div_index']),
-               Class_anomaly('botnet scan', ['+src_div_index', '+dst_div_index', '-mean_size']),
-               Class_anomaly('botnet expansion', ['+src_div_index', '+dst_div_index', '-std_size'], 'botnet scan'),
-               Class_anomaly('scan break', ['-src_div_index', '-dst_div_index', '+mean_size'])]
+    classes = [Class_anomaly('Large scan', ['-src_div_index', '+dst_div_index', '-mean_size']),
+               Class_anomaly('DDoS', ['+src_div_index', '-dst_div_index']),
+               Class_anomaly('Botnet scan', ['+src_div_index', '+dst_div_index', '-mean_size']),
+               Class_anomaly('Botnet expansion', ['+src_div_index', '+dst_div_index', '-std_size'], 'Botnet scan'),
+               Class_anomaly('Less botnet activity', ['-src_div_index', '-dst_div_index', '+mean_size']),
+               Class_anomaly('More directed traffic', ['-dst_div_index', '+mean_size', '+std_size']),
+               Class_anomaly('Normal behavior', ['-src_div_index', '-dst_div_index', '+mean_size', '+std_size'])] 
 
     # clustering_anomalies()
     classify_anomalies(classes)
