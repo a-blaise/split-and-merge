@@ -122,7 +122,6 @@ def classify_anomalies(classes):
                     if heatmap.iloc[ind]['-port_div_index'] > 0 and heatmap.iloc[ind]['+port_div_index'] == 0:
                         new_index += ' - spoofed port'
                 dict_categories[ind] = new_index
-                # heatmap.rename(index={ind: new_index}, inplace=True)
 
     for cl in classes:
         heatmap.rename(index=dict_categories, inplace=True)

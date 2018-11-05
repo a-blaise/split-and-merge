@@ -205,8 +205,7 @@ def correlation_features():
     heatmap = pd.DataFrame(list_annotations, columns=[sign + feat.attribute for sign in SIGNS
                                                       for feat in FEATURES])
 
-    comb_features = list(combinations([feat.attribute for feat in FEATURES], 2))
-    for feat_1, feat_2 in comb_features:
+    for feat_1, feat_2 in list(combinations([feat.attribute for feat in FEATURES], 2)):
         for sign_1 in SIGNS:
             for sign_2 in SIGNS:
                 rho_s, p_s = spearmanr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
@@ -282,15 +281,50 @@ def cor_features_output():
 
     for i, l in enumerate(combinations[1:]):
         rho_s, p_s = [round(val * 100, 1) for val in spearmanr(final_array.iloc[:, 0], final_array[str(l)])]
-        print(labels[i+1], rho_s)
+        print(labels[i+1], int(sum(np.subtract(final_array.iloc[:, 0], final_array[str(l)]))), rho_s)
+
+def relevant_features():
+    list_annot = []
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
+                                        N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+    ports = ports_annot.applymap(sign_to_score)
+    ports = ports.loc[(ports > T_ANO).any(axis=1)]
+
+    for index, row in ports.iterrows():
+        for i, date in enumerate(DATES[N_DAYS:]):
+            if row[i] > T_ANO:
+                annotations = [index, date]
+                for feat in FEATURES:
+                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                                       'separated', PERIOD, T, N_MIN,
+                                                       N_DAYS, 'score', 'csv'), sep=';')
+                    rep = evaluation[evaluation.port == index][date]
+                    annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
+                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                list_annot.append(annotations)
+
+    columns = ['port', 'date']
+    columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
+    heatmap = pd.DataFrame(list_annot, columns=columns)
+    print(heatmap)
+    dict_scores = dict.fromkeys([feat.attribute for feat in FEATURES], 0)
+    for index, row in heatmap.iterrows():
+        for ind_f, feat in enumerate(FEATURES):
+            if int(row[2 + ind_f * 2]) > 0 and int(row[2 + ind_f * 2 + 1]) == 0:
+                dict_scores[feat.attribute] += 1
+            if int(row[2 + ind_f * 2 + 1]) > 0 and int(row[2 + ind_f * 2]) == 0:
+                dict_scores[feat.attribute] += 1
+
+    print(dict_scores)
 
 def main(argv):
     # original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
     # compute_mse_feature(original_subnets)
-    correlation_features()
+    # correlation_features()
     # cor_features_output()
+    relevant_features()
     return 0
 
 if __name__ == '__main__':
