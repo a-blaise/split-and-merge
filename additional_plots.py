@@ -121,10 +121,10 @@ def compute_mse_feature(original_subnets):
                           dtype={'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
 
-    for subnet in original_subnets:
+    for subnet in original_subnets[:2]:
         packets_subnet = packets[packets.key == subnet]
         ports = packets_subnet.port.unique()
-        for port in ports:
+        for port in ports[:5]:
             packets_port = packets_subnet[packets_subnet.port == port]
             for date in DATES[:N_DAYS]:
                 rep = packets_port[packets_port.date == int(date)]
@@ -156,19 +156,20 @@ def compute_mse_feature(original_subnets):
                     print(port, feat.attribute, bins, count, regression, error)
                 feat.reset_object()
 
-    fig_mse, ax_mse = plt.subplots()
-    for feat in FEATURES:
-        x_coordinates, y_coordinates = ecdf(feat.mse)
-        ax_mse.plot(x_coordinates, y_coordinates, label=feat.attribute + ' ' +
-                    str(np.round(np.nanmedian(feat.mse), 2)))
+    # fig_mse, ax_mse = plt.subplots()
+    # for feat in FEATURES:
+    #     x_coordinates, y_coordinates = ecdf(feat.mse)
+    #     ax_mse.plot(x_coordinates, y_coordinates, label=feat.attribute + ' ' +
+    #                 str(np.round(np.nanmedian(feat.mse), 2)))
 
-    ax_mse.set_title('CDF MSE per feature ')
-    ax_mse.set_xlabel('Mean Squared Error')
-    ax_mse.set_ylabel('Probability to have this MSE')
-    legend = ax_mse.legend(loc='lower right', shadow=True)
-    ax_mse.grid(True)
+    # ax_mse.set_title('CDF MSE per feature ')
+    # ax_mse.set_xlabel('Mean Squared Error')
+    # ax_mse.set_ylabel('Probability to have this MSE')
+    # legend = ax_mse.legend(loc='lower right', shadow=True)
+    # ax_mse.grid(True)
 
-    fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited', 'png'), dpi=300)
+    # fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited', 'png'), dpi=300)
+    plt.show()
 
 def ecdf(data):
     raw_data = np.array(data)
@@ -306,6 +307,11 @@ def relevant_features():
     columns = ['port', 'date']
     columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
     heatmap = pd.DataFrame(list_annot, columns=columns)
+    heatmap = heatmap.rename(index=str, columns={"-src_div_index": "-src", "+src_div_index": "+src",
+                                                 "-dst_div_index": "-dst", "+dst_div_index": "+dst",
+                                                 "-port_div_index": "-port", "+port_div_index": "+port",
+                                                 "-mean_size": "-meanSz", "+mean_size": "+meanSz",
+                                                 "-std_size": "-stdSz", "+std_size": "+stdSz"})
     print(heatmap)
     dict_scores = dict.fromkeys([feat.attribute for feat in FEATURES], 0)
     for index, row in heatmap.iterrows():
@@ -318,13 +324,13 @@ def relevant_features():
     print(dict_scores)
 
 def main(argv):
-    # original_subnets, sub_df, subnets = pre_computation()
+    original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
-    # compute_mse_feature(original_subnets)
+    compute_mse_feature(original_subnets)
     # correlation_features()
     # cor_features_output()
-    relevant_features()
+    # relevant_features()
     return 0
 
 if __name__ == '__main__':

@@ -90,12 +90,64 @@ def classify_anomalies(classes):
     columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
     heatmap = pd.DataFrame(list_annot, columns=columns)
 
-    to_drop = ['nb_packets', 'SYN']
+    to_drop = ['nb_packets']
     heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
+    feats = FEATURES[:]
+    for feat in FEATURES:
+        for el in to_drop:
+            if feat.attribute == el:
+                feats.remove(feat)
 
-    dict_categories = dict.fromkeys(range(len(heatmap.values)), '')
+    heatmap_sum = heatmap.copy()
+    heatmap_sum['AS_1'] = 0
+    heatmap_sum['AS_2'] = 0
+    heatmap_sum['AS_3'] = 0
+    heatmap_sum['combination'] = ''
+
+    dict_features = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
+    dict_max = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
+
+    for index, row in heatmap.iterrows():
+        heatmap_sum.iloc[index, 14] = sum(row[2:13])
+        for ind_f, feat in enumerate(feats):
+            if int(row[2 + ind_f * 2]) > 1:
+                if int(row[3 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 15] += 1
+                    heatmap_sum.iloc[index, 17] += '+' + feat.attribute + ','
+                    dict_features['+' + feat.attribute] += 1
+                    if int(row[2 + ind_f * 2]) > dict_max['+' + feat.attribute]:
+                        dict_max['+' + feat.attribute] = int(row[2 + ind_f * 2])
+
+            elif int(row[3 + ind_f * 2]) > 1:
+                if int(row[2 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 15] += 1
+                    heatmap_sum.iloc[index, 16] = 0
+                    heatmap_sum.iloc[index, 17] += '-' + feat.attribute + ','
+                    dict_features['-' + feat.attribute] += 1
+                    if int(row[3 + ind_f * 2]) > dict_max['-' + feat.attribute]:
+                        dict_max['-' + feat.attribute] = int(row[3 + ind_f * 2])
+    
+    dict_combinations = {}
+    for key in heatmap_sum['combination'].tolist():
+        if key in dict_combinations:
+            dict_combinations[key] += 1
+        else:
+            dict_combinations[key] = 1
+
+    for index, row in heatmap.iterrows():
+        heatmap_sum.iloc[index, 14] = sum(row[2:13])
+        for ind_f, feat in enumerate(feats):
+            if int(row[2 + ind_f * 2]) > 1:
+                if int(row[3 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute]), 2)
+
+            elif int(row[3 + ind_f * 2]) > 1:
+                if int(row[2 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute]), 2)
+
+    dict_categories = dict.fromkeys(range(len(heatmap_sum.values)), '')
     for cl in classes:
-        temp = heatmap.copy()
+        temp = heatmap_sum.copy()
         for feat in cl.features:
             contrary_feat = SIGNS[(SIGNS.index(feat[0])+1)%2] + feat[1:]
             temp = temp.loc[temp[feat] > 0]
@@ -117,20 +169,26 @@ def classify_anomalies(classes):
             for ind in indices:
                 new_index = cl.description
                 if type(ind) == int:
-                    if heatmap.iloc[ind]['+port_div_index'] > 0 and heatmap.iloc[ind]['-port_div_index'] == 0:
-                        new_index += ' - not spoofed port'
-                    if heatmap.iloc[ind]['-port_div_index'] > 0 and heatmap.iloc[ind]['+port_div_index'] == 0:
-                        new_index += ' - spoofed port'
+                    if heatmap_sum.iloc[ind]['-port_div_index'] > 1 and heatmap_sum.iloc[ind]['+port_div_index'] == 0:
+                        new_index += ';spoofed port'
                 dict_categories[ind] = new_index
 
     for cl in classes:
-        heatmap.rename(index=dict_categories, inplace=True)
-    heatmap = heatmap.rename(index=str, columns={"-src_div_index": "-src", "+src_div_index": "+src",
+        heatmap_sum.rename(index=dict_categories, inplace=True)
+    heatmap_sum = heatmap_sum.rename(index=str, columns={"-src_div_index": "-src", "+src_div_index": "+src",
                                                  "-dst_div_index": "-dst", "+dst_div_index": "+dst",
                                                  "-port_div_index": "-port", "+port_div_index": "+port",
                                                  "-mean_size": "-meanSz", "+mean_size": "+meanSz",
                                                  "-std_size": "-stdSz", "+std_size": "+stdSz"})
-    print(heatmap)
+    
+    heatmap_sum = heatmap_sum.sort_values(by='AS_1', ascending=False)
+    print(heatmap_sum.iloc[:, :-1])
+
+    heatmap_sum = heatmap_sum.sort_values(by='AS_2', ascending=False)
+    print(heatmap_sum.iloc[:, :-1])
+
+    heatmap_sum = heatmap_sum.sort_values(by='AS_3', ascending=False)
+    print(heatmap_sum.iloc[:, :-1])
 
 def additional_infos(subnets):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
@@ -172,13 +230,15 @@ def additional_infos(subnets):
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
-    classes = [Class_anomaly('Large scan', ['-src_div_index', '+dst_div_index', '-mean_size']),
-               Class_anomaly('DDoS', ['+src_div_index', '-dst_div_index']),
-               Class_anomaly('Botnet scan', ['+src_div_index', '+dst_div_index', '-mean_size']),
-               Class_anomaly('Botnet expansion', ['+src_div_index', '+dst_div_index', '-std_size'], 'Botnet scan'),
-               Class_anomaly('Less botnet activity', ['-src_div_index', '-dst_div_index', '+mean_size']),
-               Class_anomaly('More directed traffic', ['-dst_div_index', '+mean_size', '+std_size']),
-               Class_anomaly('Normal behavior', ['-src_div_index', '-dst_div_index', '+mean_size', '+std_size'])] 
+    
+    classes = [Class_anomaly('More normal packets', ['+mean_size', '+std_size']),
+               Class_anomaly('More forged packets', ['-mean_size', '-std_size']),
+               Class_anomaly('Large scan', ['-src_div_index', '+dst_div_index', '-mean_size']), # OK
+               Class_anomaly('DDoS', ['+src_div_index', '-dst_div_index']), # OK
+               Class_anomaly('Botnet scan', ['+src_div_index', '+dst_div_index', '-mean_size']), # OK
+               Class_anomaly('Botnet expansion', ['+src_div_index', '+dst_div_index', '-std_size']),
+               Class_anomaly('Less botnet scan', ['-src_div_index', '-dst_div_index']),
+               Class_anomaly('Normal behavior', ['-src_div_index', '-dst_div_index', '+mean_size', '+std_size'])]
 
     # clustering_anomalies()
     classify_anomalies(classes)
