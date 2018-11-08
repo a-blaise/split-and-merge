@@ -29,10 +29,84 @@ def value_to_yaxis(value):
 def heat_map_scores():
     """Draw a panorama of the occurrences of anomaly score
     (corresponds to the number of anomalies on one port for all features in all subnetworks)."""
-    value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_agg', PERIOD, 'csv'))
-    ports = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T,
-                                  N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
-    ports = ports.applymap(sign_to_score)
+    list_annot = []
+    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
+                                        N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+    ports = ports_annot.applymap(sign_to_score)
+    ports = ports.loc[(ports > T_ANO).any(axis=1)]
+
+    for index, row in ports.iterrows():
+        for i, date in enumerate(DATES[N_DAYS:]):
+            if row[i] > T_ANO:
+                annotations = [index, date]
+                for feat in FEATURES:
+                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                                       'separated', PERIOD, T, N_MIN,
+                                                       N_DAYS, 'score', 'csv'), sep=';')
+                    rep = evaluation[evaluation.port == index][date]
+                    annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
+                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                list_annot.append(annotations)
+
+    columns = ['port', 'date']
+    columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
+    heatmap = pd.DataFrame(list_annot, columns=columns)
+
+    to_drop = ['nb_packets']
+    heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
+    feats = FEATURES[:]
+    for feat in FEATURES:
+        for el in to_drop:
+            if feat.attribute == el:
+                feats.remove(feat)
+
+    heatmap_sum = heatmap.copy()
+    heatmap_sum['AS_1'] = 0
+    heatmap_sum['AS_2'] = 0
+    heatmap_sum['AS_3'] = 0
+    heatmap_sum['combination'] = ''
+
+    dict_features = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
+    dict_max = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
+
+    for index, row in heatmap.iterrows():
+        heatmap_sum.iloc[index, 14] = sum(row[2:13])
+        for ind_f, feat in enumerate(feats):
+            if int(row[2 + ind_f * 2]) > 1:
+                if int(row[3 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 15] += 1
+                    heatmap_sum.iloc[index, 17] += '+' + feat.attribute + ','
+                    dict_features['+' + feat.attribute] += 1
+                    if int(row[2 + ind_f * 2]) > dict_max['+' + feat.attribute]:
+                        dict_max['+' + feat.attribute] = int(row[2 + ind_f * 2])
+
+            elif int(row[3 + ind_f * 2]) > 1:
+                if int(row[2 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 15] += 1
+                    heatmap_sum.iloc[index, 16] = 0
+                    heatmap_sum.iloc[index, 17] += '-' + feat.attribute + ','
+                    dict_features['-' + feat.attribute] += 1
+                    if int(row[3 + ind_f * 2]) > dict_max['-' + feat.attribute]:
+                        dict_max['-' + feat.attribute] = int(row[3 + ind_f * 2])
+    
+     dict_combinations = {}
+    for key in heatmap_sum['combination'].tolist():
+        if key in dict_combinations:
+            dict_combinations[key] += 1
+        else:
+            dict_combinations[key] = 1
+
+    for index, row in heatmap.iterrows():
+        heatmap_sum.iloc[index, 14] = sum(row[2:13])
+        for ind_f, feat in enumerate(feats):
+            if int(row[2 + ind_f * 2]) > 1:
+                if int(row[3 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute]), 2)
+
+            elif int(row[3 + ind_f * 2]) > 1:
+                if int(row[2 + ind_f * 2]) == 0:
+                    heatmap_sum.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute]), 2)
+
     result = ports.apply(pd.Series.value_counts).iloc[1:]
     annot_matrix = result.copy(deep=True)
     result.apply(value_to_yaxis, axis=1)
@@ -58,46 +132,7 @@ def heat_map_scores():
     for i in range(0, data.shape[0]):
         for j in range(0, data.shape[1]):
             if not np.isnan(data_annot[i, j]):
-                color = 'black'
-                if i > 6:
-                    score = result.iloc[i, j]
-                    temp_df = ports.iloc[:, j]
-                    port = temp_df[temp_df == score].index[0]
-                    per = int(round(value[(value.date == int(DATES[N_DAYS + j]))
-                                          & (value.port == int(port))]
-                                    ['nb_packets'] / 10 ** 6 * 1000))
-                    text = axis.text(j+0.55, i-0.13, port, color=color, size=6.5)
-                    text = axis.text(j+0.55, i+0.45, per, color=color, size=6.5)
-
-                    # props = dict(width=0.1, headlength=4, headwidth=5,
-                    #              facecolor='black', shrink=0.05)
-                    # axis.annotate('ADB exploit', xy=(6, 15.5), xytext=(4, 17.5), arrowprops=props)
-                    # text = axis.text(4, 18.2, 'port 5555 - 0.1 %', color=color, size=7)
-                    # axis.annotate('Exploit', xy=(10, 13.5), xytext=(8.5, 12), arrowprops=props)
-                    # text = axis.text(8.5, 12.5, 'port 7001 - <0.1 %', color='black', size=6.5)
-                    # axis.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.8),
-                    #               arrowprops=props)
-                    # text = axis.text(11.5, 15.5, 'port 2000 - 0.3 %', color=color, size=7)
-                    # axis.annotate('Hajime scan', xy=(13.5, 18), xytext=(15, 17.5),
-                    #               arrowprops=props)
-                    # text = axis.text(15, 18.2, 'port 8291 - <0.1 %', color=color, size=7)
-                    # axis.annotate('Exploit', xy=(0, 14.5), xytext=(0, 16.5),
-                    #               arrowprops=props)
-                    # text = axis.text(0, 17, 'port 2222 - 0.1 %', color='black', size=6.5)
-                    # axis.annotate('Scan break', xy=(16.5, 16), xytext=(18, 15.5),
-                    #               arrowprops=props)
-                    # text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
-                    # axis.annotate('Scan break', xy=(17.5, 15), xytext=(18, 15.5),
-                    #               arrowprops=props)
-                    # text = axis.text(18, 16.2, 'port 23 - 2.4 %', color=color, size=7)
-                    # axis.annotate('Massive scan', xy=(5, 14.5), xytext=(5.6, 12.5),
-                    #               arrowprops=props)
-                    # text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
-                    # axis.annotate('Massive scan', xy=(9, 15.5), xytext=(5.6, 12.5),
-                    #               arrowprops=props)
-                    # text = axis.text(5.6, 13.2, 'port 81 - <0.1 %', color=color, size=7)
-                if i > 12:
-                    color = 'white'
+                color = 'white' if i > 12 else 'black'
                 text = axis.text(j, i, int(data_annot[i, j]), fontdict=dict_font)
 
     if not os.path.exists(PATH_FIGURES):

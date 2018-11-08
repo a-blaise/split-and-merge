@@ -150,7 +150,7 @@ def classify_anomalies(classes):
         temp = heatmap_sum.copy()
         for feat in cl.features:
             contrary_feat = SIGNS[(SIGNS.index(feat[0])+1)%2] + feat[1:]
-            temp = temp.loc[temp[feat] > 0]
+            temp = temp.loc[temp[feat] > 1]
             temp = temp.loc[temp[contrary_feat] == 0]
         
         ant = [cla.anomalies for cla in classes if cla.description == 'Botnet scan'][0]
