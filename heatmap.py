@@ -21,9 +21,9 @@ from features import FEATURES
 def value_to_yaxis(value):
     """Lambda function to replace each non-zero value by its y-number."""
     new_vector = value
-    for i, element in enumerate(x):
+    for i, element in enumerate(value):
         if element > 0:
-            new_vector[i] = int(x.name)
+            new_vector[i] = int(value.name)
     return new_vector
 
 def heat_map_scores():
@@ -34,111 +34,142 @@ def heat_map_scores():
                                         N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
-
-    for index, row in ports.iterrows():
-        for i, date in enumerate(DATES[N_DAYS:]):
-            if row[i] > T_ANO:
-                annotations = [index, date]
-                for feat in FEATURES:
-                    evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                                                       'separated', PERIOD, T, N_MIN,
-                                                       N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == index][date]
-                    annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
-                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
-                list_annot.append(annotations)
-
-    columns = ['port', 'date']
-    columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
-    heatmap = pd.DataFrame(list_annot, columns=columns)
+    # ports_sum = ports.copy()
+    ports_sum = pd.DataFrame(0, index=ports.index, columns=ports.columns)
 
     to_drop = ['nb_packets']
-    heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
     feats = FEATURES[:]
     for feat in FEATURES:
         for el in to_drop:
             if feat.attribute == el:
                 feats.remove(feat)
 
-    heatmap_sum = heatmap.copy()
-    heatmap_sum['AS_1'] = 0
-    heatmap_sum['AS_2'] = 0
-    heatmap_sum['AS_3'] = 0
-    heatmap_sum['combination'] = ''
+    for index, row in ports.iterrows():
+        for i, date in enumerate(DATES[N_DAYS:]):
+            annotations = [index, date]
+            for feat in feats:
+                evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                                   'separated', PERIOD, T, N_MIN,
+                                                   N_DAYS, 'score', 'csv'), sep=';')
+                rep = evaluation[evaluation.port == index][date]
+                annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
+                                   if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+            list_annot.append(annotations)
+
+    columns = ['port', 'date']
+    columns.extend([sign + feat.attribute for feat in feats for sign in SIGNS])
+    heatmap = pd.DataFrame(list_annot, columns=columns)
 
     dict_features = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
     dict_max = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
 
+    heatmap['AS_1'] = 0
+    heatmap['AS_2'] = 0
+    heatmap['AS_3'] = 0
+
     for index, row in heatmap.iterrows():
-        heatmap_sum.iloc[index, 14] = sum(row[2:13])
+        heatmap.iloc[index, 14] = sum(row[2:13])
         for ind_f, feat in enumerate(feats):
             if int(row[2 + ind_f * 2]) > 1:
                 if int(row[3 + ind_f * 2]) == 0:
-                    heatmap_sum.iloc[index, 15] += 1
-                    heatmap_sum.iloc[index, 17] += '+' + feat.attribute + ','
+                    heatmap.iloc[index, 15] += 1
                     dict_features['+' + feat.attribute] += 1
                     if int(row[2 + ind_f * 2]) > dict_max['+' + feat.attribute]:
                         dict_max['+' + feat.attribute] = int(row[2 + ind_f * 2])
 
             elif int(row[3 + ind_f * 2]) > 1:
                 if int(row[2 + ind_f * 2]) == 0:
-                    heatmap_sum.iloc[index, 15] += 1
-                    heatmap_sum.iloc[index, 16] = 0
-                    heatmap_sum.iloc[index, 17] += '-' + feat.attribute + ','
+                    heatmap.iloc[index, 15] += 1
                     dict_features['-' + feat.attribute] += 1
                     if int(row[3 + ind_f * 2]) > dict_max['-' + feat.attribute]:
                         dict_max['-' + feat.attribute] = int(row[3 + ind_f * 2])
-    
-     dict_combinations = {}
-    for key in heatmap_sum['combination'].tolist():
-        if key in dict_combinations:
-            dict_combinations[key] += 1
-        else:
-            dict_combinations[key] = 1
 
+    print(heatmap)
     for index, row in heatmap.iterrows():
-        heatmap_sum.iloc[index, 14] = sum(row[2:13])
         for ind_f, feat in enumerate(feats):
-            if int(row[2 + ind_f * 2]) > 1:
-                if int(row[3 + ind_f * 2]) == 0:
-                    heatmap_sum.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute]), 2)
+            if int(row[2 + ind_f * 2]) > 1 and int(row[3 + ind_f * 2]) == 0:
+                    heatmap.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute]), 2)
+                    ports_sum.loc[row[0], row[1]] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute]), 2)
 
-            elif int(row[3 + ind_f * 2]) > 1:
-                if int(row[2 + ind_f * 2]) == 0:
-                    heatmap_sum.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute]), 2)
+            elif int(row[3 + ind_f * 2]) > 1 and int(row[2 + ind_f * 2]) == 0:
+                    heatmap.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute]), 2)
+                    ports_sum.loc[row[0], row[1]] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['-' + feat.attribute])  / (dict_max['-' + feat.attribute]), 2)
 
-    result = ports.apply(pd.Series.value_counts).iloc[1:]
-    annot_matrix = result.copy(deep=True)
-    result.apply(value_to_yaxis, axis=1)
-    data_annot = np.array(annot_matrix)
-    data = np.array(result)
+    print(ports)
+    print(ports_sum)
 
-    fig, axis = plt.subplots()
-    image = axis.imshow(data, cmap='YlOrRd', aspect=.7)
+    # result = ports.apply(pd.Series.value_counts).iloc[1:]
+    # annot_matrix = result.copy(deep=True)
+    # result.apply(value_to_yaxis, axis=1)
+    # data_annot = np.array(annot_matrix)
+    # data = np.array(result)
 
-    axis.set_ylabel('Anomaly score')
-    axis.set_xlabel('Time')
+    # fig, axis = plt.subplots()
+    # image = axis.imshow(data, cmap='YlOrRd', aspect=.7)
 
-    axis.set_yticks(np.arange(data.shape[0]))
-    axis.set_xticks(np.arange(data.shape[1]))
+    # axis.set_ylabel('Anomaly score')
+    # axis.set_xlabel('Time')
 
-    axis.set_yticklabels(result.index.values)
-    axis.set_xticklabels([x[0:2] + '/' + x[2:] for x in result.columns.values])
+    # axis.set_yticks(np.arange(data.shape[0]))
+    # axis.set_xticks(np.arange(data.shape[1]))
 
-    # Rotate the tick labels and set their alignment.
-    plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
+    # axis.set_yticklabels(result.index.values)
+    # axis.set_xticklabels([x[0:2] + '/' + x[2:] for x in result.columns.values])
 
-    # Loop over data dimensions and create text annotations.
-    for i in range(0, data.shape[0]):
-        for j in range(0, data.shape[1]):
-            if not np.isnan(data_annot[i, j]):
-                color = 'white' if i > 12 else 'black'
-                text = axis.text(j, i, int(data_annot[i, j]), fontdict=dict_font)
+    # # Rotate the tick labels and set their alignment.
+    # plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
 
-    if not os.path.exists(PATH_FIGURES):
-        os.mkdir(PATH_FIGURES)
-    fig.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'),
-                dpi=600, bbox_inches='tight')
+    # # Loop over data dimensions and create text annotations.
+    # for i in range(0, data.shape[0]):
+    #     for j in range(0, data.shape[1]):
+    #         if not np.isnan(data_annot[i, j]):
+    #             color = 'white' if i > 12 else 'black'
+    #             text = axis.text(j, i, int(data_annot[i, j]), fontdict=dict_font)
+
+    # if not os.path.exists(PATH_FIGURES):
+    #     os.mkdir(PATH_FIGURES)
+    # fig.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'),
+    #             dpi=600, bbox_inches='tight')
+
+# def heat_map_scores():
+#     dict_font = dict(ha='center', va='center', size=10)
+#     value = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_agg', PERIOD, 'csv'))
+#     ports = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T,
+#                                   N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+#     ports = ports.applymap(sign_to_score)
+#     print(ports)
+#     result = ports.apply(pd.Series.value_counts).iloc[1:]
+#     annot_matrix = result.copy(deep=True)
+#     result.apply(value_to_yaxis, axis=1)
+#     data_annot = np.array(annot_matrix)
+#     data = np.array(result)
+
+#     fig, axis = plt.subplots()
+#     image = axis.imshow(data, cmap='YlOrRd', aspect=.7)
+
+#     axis.set_ylabel('Anomaly score')
+#     axis.set_xlabel('Time')
+
+#     axis.set_yticks(np.arange(data.shape[0]))
+#     axis.set_xticks(np.arange(data.shape[1]))
+
+#     axis.set_yticklabels(result.index.values)
+#     axis.set_xticklabels([x[0:2] + '/' + x[2:] for x in result.columns.values])
+
+#     # Rotate the tick labels and set their alignment.
+#     plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
+
+#     # Loop over data dimensions and create text annotations.
+#     for i in range(0, data.shape[0]):
+#         for j in range(0, data.shape[1]):
+#             if not np.isnan(data_annot[i, j]):
+#                 color = 'white' if i > 12 else 'black'
+#                 text = axis.text(j, i, int(data_annot[i, j]), fontdict=dict_font)
+
+#     if not os.path.exists(PATH_FIGURES):
+#         os.mkdir(PATH_FIGURES)
+#     # fig.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'),
+#     #             dpi=600, bbox_inches='tight')
 
 def get_sum_string(element):
     """Lambda function to sum two given scores, e.g., '+5, -4' becomes 9."""
@@ -236,7 +267,7 @@ def color(pos):
     return 'white' if int(pos[1:]) > 6 else 'black'
 
 def main(argv):
-    # heat_map_scores()
+    heat_map_scores()
     # heatmap_anomalies()
     return 0
 
