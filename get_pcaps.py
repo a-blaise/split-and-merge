@@ -16,24 +16,30 @@
 import sys
 import os
 from subprocess import call
-from Settings import *
+from settings import *
 
 # Recover pcap files from the MAWI database for all days and unzip them
 def recover_pcap_files():
 	year = ''
-	for date in dates:
+	for date in DATES:
 		if PERIOD == 2018:
-			if int(date) > 1000: # 1001 = 1st of October, so October to December --> 2017 month
+			if int(date) > 1000:
 				year = '2017'
 			else:
 				year = '2018'
+
+		if PERIOD == 2017:
+			if int(date) > 1000:
+				year = '2016'
+			else:
+				year = '2017'
 		else:
-			year = '2016'
+			year = str(PERIOD)
 		if not os.path.exists(PATH_PCAPS):
 			os.mkdir(PATH_PCAPS)
 		os.chdir(PATH_PCAPS)
 		call(['wget', '-c', 'http://mawi.wide.ad.jp/mawi/samplepoint-F/' + year + '/' + year + date + '1400.pcap.gz'])
-		call(['gunzip', year + date + '1400.pcap.gz'])
+		# call(['gunzip', year + date + '1400.pcap.gz'])
 
 def main(argv):
 	recover_pcap_files()

@@ -37,11 +37,13 @@ def clustering_anomalies():
                                         N_DAYS, 'score', 'csv'), sep=';', index_col=0)
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
+    labels = []
 
     for index, row in ports.iterrows():
         for i, date in enumerate(DATES[N_DAYS:]):
             if row[i] > T_ANO:
                 annotations = []
+                labels.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
                 for feat in FEATURES:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
@@ -52,19 +54,30 @@ def clustering_anomalies():
                 list_annot.append(annotations)
 
     heatmap = pd.DataFrame(list_annot, columns=[sign + feat.attribute for feat in FEATURES
-                                                for sign in SIGNS])
+                                                for sign in SIGNS], index=labels)
 
-    # to_drop = ['nb_packets', 'SYN', 'port_div_index']
-    to_drop = ['nb_packets']
+    to_drop = ['nb_packets', 'SYN', 'port_div_index']
     heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
 
-    epsilon = 2.88
+    epsilon = 2.3 # 2.5 pas mal mais pas encore assez précis
     heatmap_fit = StandardScaler().fit_transform(heatmap)
     dbscan = DBSCAN(eps=epsilon, min_samples=1).fit(heatmap_fit)
     labels = dbscan.labels_
+    n_clusters_ = len(set(labels))
 
-    # print('Cluster ' + str(i + 1) + ':', [heatmap.iloc[j] for j, label in enumerate(labels)
-    #                                       for i in range(len(set(labels))) if label == i])
+    for i in range(n_clusters_):
+        specs = []
+        anomalies = pd.DataFrame(columns=heatmap.columns)
+        for j in range(len(labels)):
+            if labels[j] == i:
+                anomalies = anomalies.append(heatmap.iloc[j])
+                
+        anomalies = anomalies.rename(index=str, columns={'-src_div_index': '-src', '+src_div_index': '+src',
+                                                 '-dst_div_index': '-dst', '+dst_div_index': '+dst',
+                                                 '-port_div_index': '-port', '+port_div_index': '+port',
+                                                 '-mean_size': '-meanSz', '+mean_size': '+meanSz',
+                                                 '-std_size': '-stdSz', '+std_size': '+stdSz'})
+        print(anomalies)
 
 def classify_anomalies(classes):
     list_annot = []
@@ -73,11 +86,18 @@ def classify_anomalies(classes):
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
 
+    to_drop = ['nb_packets', 'SYN']
+    feats = FEATURES[:]
+    for feat in FEATURES:
+        for el in to_drop:
+            if feat.attribute == el:
+                feats.remove(feat)
+
     for index, row in ports.iterrows():
         for i, date in enumerate(DATES[N_DAYS:]):
             if row[i] > T_ANO:
                 annotations = [index, date]
-                for feat in FEATURES:
+                for feat in feats:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
                                                        N_DAYS, 'score', 'csv'), sep=';')
@@ -87,16 +107,9 @@ def classify_anomalies(classes):
                 list_annot.append(annotations)
 
     columns = ['port', 'date']
-    columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
+    columns.extend([sign + feat.attribute for feat in feats for sign in SIGNS])
     heatmap = pd.DataFrame(list_annot, columns=columns)
-
-    to_drop = ['nb_packets']
-    heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
-    feats = FEATURES[:]
-    for feat in FEATURES:
-        for el in to_drop:
-            if feat.attribute == el:
-                feats.remove(feat)
+    print(heatmap)
 
     heatmap['AS_1'] = 0
     heatmap['AS_2'] = 0
@@ -106,27 +119,37 @@ def classify_anomalies(classes):
     dict_max = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
 
     for index, row in heatmap.iterrows():
-        heatmap.iloc[index, 14] = sum(row[2:13])
+        heatmap.iloc[index, 12] = sum(row[2:12])
         for ind_f, feat in enumerate(feats):
             if int(row[2 + ind_f * 2]) > 1 and int(row[3 + ind_f * 2]) == 0:
-                heatmap.iloc[index, 15] += 1
+                heatmap.iloc[index, 13] += 1
                 dict_features['+' + feat.attribute] += 1
                 if int(row[2 + ind_f * 2]) > dict_max['+' + feat.attribute]:
                     dict_max['+' + feat.attribute] = int(row[2 + ind_f * 2])
 
             elif int(row[3 + ind_f * 2]) > 1 and int(row[2 + ind_f * 2]) == 0:
-                heatmap.iloc[index, 15] += 1
+                heatmap.iloc[index, 13] += 1
                 dict_features['-' + feat.attribute] += 1
                 if int(row[3 + ind_f * 2]) > dict_max['-' + feat.attribute]:
                     dict_max['-' + feat.attribute] = int(row[3 + ind_f * 2])
-    
-    for index, row in heatmap.iterrows():
-        for ind_f, feat in enumerate(feats):
-            if int(row[2 + ind_f * 2]) > 1 and int(row[3 + ind_f * 2]) == 0:
-                heatmap.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute]), 2)
 
-            elif int(row[3 + ind_f * 2]) > 1 and int(row[2 + ind_f * 2]) == 0:
-                heatmap.iloc[index, 16] += np.round(np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2])) / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute]), 2)
+    for index, row in heatmap.iterrows():
+        # if row[0] == 8888:
+        #     print('port 8888')
+        # if row[0] == 7001:
+        #     print('port 7001') 
+        for ind_f, feat in enumerate(feats):
+            result = np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2]))
+            # if row[0] == 8888 or row[0] == 7001:
+            #     print('before', feat.attribute, result)
+            if int(row[2 + ind_f * 2]) > int(row[3 + ind_f * 2]):
+                result = result / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute])
+            else:
+                result = result / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute])
+            # if row[0] == 8888 or row[0] == 7001:
+            #     print('after', feat.attribute, result)
+            if not np.isnan(result) and not np.isinf(result):
+                heatmap.iloc[index, 14] += np.round(result, 2)
 
     dict_categories = dict.fromkeys(range(len(heatmap.values)), '')
     for cl in classes:
@@ -164,13 +187,19 @@ def classify_anomalies(classes):
                                                  "-std_size": "-stdSz", "+std_size": "+stdSz"})
     
     heatmap = heatmap.sort_values(by='AS_1', ascending=False)
-    print(heatmap.iloc[:, :-1])
+    # print(heatmap)
 
     heatmap = heatmap.sort_values(by='AS_2', ascending=False)
-    print(heatmap.iloc[:, :-1])
+    # print(heatmap)
 
     heatmap = heatmap.sort_values(by='AS_3', ascending=False)
-    print(heatmap.iloc[:, :-1])
+    # print(heatmap)
+
+    print(heatmap.loc[heatmap['port'] == 23])
+
+    # temp = heatmap.loc[(heatmap['port'] == 2222) | (heatmap['port'] == 2000)]
+    # temp = temp.loc[(temp['date'] == '0104') | (temp['date'] == '0426')]
+    # print(temp)
 
 def additional_infos(subnets):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),

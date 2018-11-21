@@ -93,7 +93,7 @@ def plot_time_series(original_subnets):
                     for i in range(N_DAYS, len(values)):
                         median = np.nanmedian(values[i - N_DAYS:i-1])
                         mad = np.nanmedian([np.abs(y - median) for y in values[i - N_DAYS:i-1]])
-                        fig.mzscores[DATES[i]] = [0.6745 * (values[i] - median) / nad]
+                        fig.mzscores[DATES[i]] = [0.6745 * (values[i] - median) / mad]
                     ax_totake.plot(y, fig.mzscores.values(), label=subnet)
                 ax_totake.set_xlabel('Time')
                 ax_totake.set_ylabel(' '.join(['Moving Z-score for', fig.legend, 'on port',
@@ -121,10 +121,10 @@ def compute_mse_feature(original_subnets):
                           dtype={'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
 
-    for subnet in original_subnets[:2]:
+    for subnet in original_subnets:
         packets_subnet = packets[packets.key == subnet]
         ports = packets_subnet.port.unique()
-        for port in ports[:5]:
+        for port in ports:
             packets_port = packets_subnet[packets_subnet.port == port]
             for date in DATES[:N_DAYS]:
                 rep = packets_port[packets_port.date == int(date)]
@@ -133,43 +133,44 @@ def compute_mse_feature(original_subnets):
             for feat in FEATURES:
                 vector = [feat.time_vect[i] for i in range(N_DAYS)
                           if not np.isnan(feat.time_vect[i])]
-                mu = np.nanmean(vector)
-                sigma = np.nanstd(vector)
-                n_vector = [(v - mu) / sigma for v in vector]
-                if len(vector) > 3 and sigma != 0:
-                    mu = 0
-                    sigma = 1
+                # mu = np.nanmean(vector)
+                # sigma = np.nanstd(vector)
+                median = np.nanmedian(vector)
+                mad = np.nanmedian([np.abs(y - median) for y in vector])
+                n_vector = [(v - median) / mad for v in vector]
+                if len(vector) > 3 and mad != 0:
+                    median = 0
+                    mad = 1
                     count, bins = np.histogram(n_vector, BINS_SIZE, density=1)
                     regression = [gauss(b) for b in bins[:-1] + np.diff(bins) / 2]
                     error = mean_squared_error(count, regression)
 
-                    fig, ax = plt.subplots()
-                    ax.set_title('port ' + str(port) + ' feature ' + feat.attribute)
-                    ax.bar(bins[:-1] + np.diff(bins) / 2, count)
-                    ax.plot(bins[:-1] + np.diff(bins) / 2, regression, linewidth=2,
-                            color='r')
-                    if error > 10:
-                        ax.set_title(' '. join('port', str(port), 'feature',
-                                               feat.attribute, str(error)))
+                    # fig, ax = plt.subplots()
+                    # ax.set_title('port ' + str(port) + ' feature ' + feat.attribute)
+                    # ax.bar(bins[:-1] + np.diff(bins) / 2, count)
+                    # ax.plot(bins[:-1] + np.diff(bins) / 2, regression, linewidth=2,
+                    #         color='r')
+                    # if error > 10:
+                    #     ax.set_title(' '. join('port', str(port), 'feature',
+                    #                            feat.attribute, str(error)))
                     if not np.isnan(error):
                         feat.mse.append(error)
-                    print(port, feat.attribute, bins, count, regression, error)
+                    # print(port, feat.attribute, bins, count, regression, error)
                 feat.reset_object()
 
-    # fig_mse, ax_mse = plt.subplots()
-    # for feat in FEATURES:
-    #     x_coordinates, y_coordinates = ecdf(feat.mse)
-    #     ax_mse.plot(x_coordinates, y_coordinates, label=feat.attribute + ' ' +
-    #                 str(np.round(np.nanmedian(feat.mse), 2)))
+    fig_mse, ax_mse = plt.subplots()
+    for feat in FEATURES:
+        x_coordinates, y_coordinates = ecdf(feat.mse)
+        ax_mse.plot(x_coordinates, y_coordinates, label=feat.attribute + ' ' +
+                    str(np.round(np.nanmedian(feat.mse), 3)))
 
-    # ax_mse.set_title('CDF MSE per feature ')
-    # ax_mse.set_xlabel('Mean Squared Error')
-    # ax_mse.set_ylabel('Probability to have this MSE')
-    # legend = ax_mse.legend(loc='lower right', shadow=True)
-    # ax_mse.grid(True)
+    ax_mse.set_title('CDF MSE per feature ')
+    ax_mse.set_xlabel('Mean Squared Error')
+    ax_mse.set_ylabel('Probability to have this MSE')
+    legend = ax_mse.legend(loc='lower right', shadow=True)
+    ax_mse.grid(True)
 
-    # fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf', N_MIN, BINS_SIZE, 'limited', 'png'), dpi=300)
-    plt.show()
+    fig_mse.savefig(path_join(PATH_FIGURES, 'ecdf_median', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=300)
 
 def ecdf(data):
     raw_data = np.array(data)
@@ -182,6 +183,81 @@ def ecdf(data):
         temp = raw_data[raw_data <= i]
         y_values.append(temp.size / size_data)
     return x_values, y_values
+
+
+def mse_ndays(subnets):
+    packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
+                          dtype={'nb_packets': int})
+    packets = packets[packets.nb_packets > N_MIN]
+
+    file = open(path_join(PATH_EVAL, 'mse_ndays', PERIOD, 'csv'), 'w')
+
+    for nb_day in NB_DAYS:
+        for subnet in subnets:
+            packets_subnet = packets[packets.key == subnet]
+            ports = packets_subnet.port.unique()
+            for port in ports[:10]:
+                packets_port = packets_subnet[packets_subnet.port == port]
+                for feat in FEATURES:
+                    feat.reset_object()
+                    for i, date in enumerate(DATES):
+                        rep = packets_port[packets_port.date == int(date)]
+                        feat.time_vect.append(rep[feat.attribute].item() if not rep.empty else np.nan)
+                        if i > len(DATES) - LEN_PERIOD:
+                            vector = [feat.time_vect[j] for j in range(i - nb_day, i) if not np.isnan(feat.time_vect[j])]
+                            mean = np.nanmean(vector)
+                            std = np.nanmean([np.abs(y - mean) for y in vector])
+                            median = np.nanmedian(vector)
+                            mad = np.nanmedian([np.abs(y - median) for y in vector])
+                            vector_mean = [(v - mean) / std for v in vector]
+                            vector_median = [(v - median) / mad for v in vector]
+                            if len(vector) > 3 and mad != 0:
+                                mean = 0
+                                std = 1
+                                median = 0
+                                mad = 1
+                                count_mean, bins_mean = np.histogram(vector_mean, BINS_SIZE, density=1)
+                                count_median, bins_median = np.histogram(vector_median, BINS_SIZE, density=1)
+                                regression_mean = [gauss(b) for b in bins_mean[:-1] + np.diff(bins_mean) / 2]
+                                regression_median = [gauss(b) for b in bins_median[:-1] + np.diff(bins_median) / 2]
+                                error_mean = mean_squared_error(count_mean, regression_mean)
+                                error_median = mean_squared_error(count_median, regression_median)
+                                if not np.isnan(error_mean):
+                                    feat.mse_mean.append(np.round(error_mean, 3))
+                                if not np.isnan(error_median):
+                                    feat.mse_median.append(np.round(error_median, 3))
+        for feat in FEATURES:
+            value1 = round(np.nanmedian(feat.mse_mean), 3)
+            value2 = round(np.nanmedian(feat.mse_median), 3)
+            file.write(','.join((str(nb_day), str(feat.attribute), str(value1), str(value2))) + '\n')
+            del feat.mse_mean[:]
+            del feat.mse_median[:]
+
+# 1 courbe / feature
+def plot_mse_ndays():
+    mse = pd.read_csv(path_join(PATH_EVAL, 'mse_ndays', PERIOD, 'csv'),
+                      dtype={'nb_packets': int}, names=['nb_day', 'feature', 'mean', 'median'])
+
+    markers = ['.', ',', 'o', 'v', '^', '+', '1']
+    linestyles = ['-', '--', '-.', ':']
+
+    tools = ['median', 'mean']
+    for tool in tools:
+        fig_mse, ax_mse = plt.subplots()
+        for i, feat in enumerate(FEATURES):
+            value = mse[mse.feature == feat.attribute]
+            results = value[tool].tolist()
+            results = list(map(lambda x: round(x, 3), results))
+            ax_mse.plot(NB_DAYS, results, label=feat.attribute, marker=markers[i], linestyle=linestyles[i % 4])
+
+        ax_mse.set_title(tool + ' MSE per feature ')
+        ax_mse.set_xlabel('Window size')
+        ax_mse.set_ylabel(tool + ' MSE')
+        ax_mse.set_xticks(NB_DAYS)
+        ax_mse.set_xticklabels(NB_DAYS)
+        ax_mse.legend()
+        # ax_mse.grid(True)
+        fig_mse.savefig(path_join(PATH_FIGURES, tool + '_mse_feature', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=300)
 
 def correlation_features():
     list_annotations = []
@@ -213,7 +289,6 @@ def correlation_features():
                 rho_p, p_p = pearsonr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
                 if np.abs(rho_s) > 0.75:
                     print(sign_1 + feat_1, sign_2 + feat_2, round(rho_s * 100, 1))
-                    # print(heatmap[sign_1 + feat_1].tolist(), heatmap[sign_2 + feat_2].tolist())
 
 def cor_features_output():
     feat_df = dict.fromkeys([feat.attribute for feat in FEATURES], pd.DataFrame())
@@ -327,7 +402,9 @@ def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
-    compute_mse_feature(original_subnets)
+    # compute_mse_feature(original_subnets)
+    # mse_ndays(subnets)
+    plot_mse_ndays()
     # correlation_features()
     # cor_features_output()
     # relevant_features()
