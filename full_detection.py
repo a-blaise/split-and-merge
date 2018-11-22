@@ -62,10 +62,12 @@ def retrieve_subnets(original_subnets, sub_df):
     for date in DATES:
         period = PERIOD
         # 1001 = first of October. From October to December -> 2017
-        if PERIOD == 2018 and int(date) > 1000:
-            period = 2017
+        if PERIOD == 2016 and int(date) > 1000:
+            period = 2015
         if PERIOD == 2017 and int(date) > 1000:
             period = 2016
+        if PERIOD == 2018 and int(date) > 1000:
+            period = 2017
         daily_subnets = sub_df[sub_df.date == date].iloc[0, 1:].tolist()
         chunks = pd.read_csv(path_join(PATH_CSVS, 'data', str(period) + str(date), 'csv'),
                              chunksize=N_BATCH,
@@ -140,10 +142,12 @@ def compute_subnets(original_subnets, sub_df):
     for date in DATES:
         period = PERIOD
         # 1001 = first of October. From October to December -> 2017
-        if PERIOD == 2018 and int(date) > 1000:
-            period = 2017
+        if PERIOD == 2016 and int(date) > 1000:
+            period = 2015
         if PERIOD == 2017 and int(date) > 1000:
             period = 2016
+        if PERIOD == 2018 and int(date) > 1000:
+            period = 2017
         chunks = pd.read_csv(path_join(PATH_CSVS, 'data', str(period) + str(date), 'csv'),
                              chunksize=N_BATCH,
                              dtype={'IP_src': object, 'IP_dst': object, 'port_src': int,
@@ -184,24 +188,32 @@ def evaluation_ports(original_subnets):
         packets = packets[packets.nb_packets > N_MIN]
         subnets = original_subnets if method == 'separated' else ['all']
 
+        for feat in FEATURES:
+            feat.to_write = 'port;' + ';'.join(DATES[N_DAYS:]) + '\n'
+
         if not os.path.exists(PATH_EVAL):
             os.mkdir(PATH_EVAL)
 
         ports = packets.port.unique()
+        batch_size = 50
 
         evaluations = {}
-        for feat in FEATURES:
-            evaluations[feat.attribute] = pd.DataFrame(columns=DATES[N_DAYS:], index=ports)
-            evaluations[feat.attribute] = evaluations[feat.attribute].fillna('')
-
-        print(len(ports))
         for ind_port, port in enumerate(ports):
-            if ind_port % 1000 == 0:
-                print(ind_port)
-            packets_port = packets[packets.port == port]
+            if ind_port % batch_size == 0:
+                for feat in FEATURES:
+                    if ind_port != 0:
+                        evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
+                                                             N_MIN, N_DAYS, 'test2', 'csv'), sep=';', mode='a')
+                    if len(ports) > (ind_port + 1) * batch_size:
+                        evaluations[feat.attribute] = pd.DataFrame(columns=DATES[N_DAYS:], index=ports[ind_port * batch_size: (ind_port + 1) * batch_size])
+                    else:
+                        evaluations[feat.attribute] = pd.DataFrame(columns=DATES[N_DAYS:], index=ports[ind_port * batch_size:])
+                    evaluations[feat.attribute] = evaluations[feat.attribute].fillna('')
 
+            packets_port = packets[packets.port == port]
             for feat in FEATURES:
                 feat.reset_object()
+                feat.to_write += str(port) + ';'
                 for subnet in subnets:
                     del feat.time_vect[:]
                     packets_sub = (packets_port.copy() if method == 'agg'
@@ -220,10 +232,6 @@ def evaluation_ports(original_subnets):
                             elif mzscore < - T:
                                 evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
 
-        for feat in FEATURES:
-            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
-                                               N_MIN, N_DAYS, 'csv'), sep=";")
-
 def get_nb_alarms(x):
     """Lambda function to get the number of anomalies given a list of anomalous subnets"""
     string = str(x)
@@ -239,9 +247,6 @@ def eval_scores():
         for method in METHODS:
             ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
                                           T, N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-            # Lambda function to get the number of anomalies given a list of anomalous subnets
-            # get_nb_alarms = lambda x: ','.join([sign + str(str(x).count(sign)) for sign in
-            #                                     range('+', '-')]) if str(x) != 'nan' else np.nan
             ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
             ports.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
                                    T, N_MIN, N_DAYS, 'score', 'csv'), sep=';')
@@ -251,8 +256,8 @@ def main(argv):
     # retrieve_subnets(original_subnets, sub_df)
 
     # compute_subnets(original_subnets, sub_df)
-    # evaluation_test(original_subnets)
     evaluation_ports(original_subnets)
+    # evaluation_ports2(original_subnets)
     # eval_scores()
     return 0
 

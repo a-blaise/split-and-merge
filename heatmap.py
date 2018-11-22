@@ -341,7 +341,7 @@ def heatmap_anomalies():
 def color(pos):
     """Choose color of heatmap annotation based on the square color."""
     return 'white' if int(pos[1:]) > 6 else 'black'
-
+    
 def main(argv):
     heat_map_scores()
     # print_hm()
