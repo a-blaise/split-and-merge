@@ -176,14 +176,14 @@ def compute_subnets(original_subnets, sub_df):
                         compute_metrics(files, packets, date, sub)
             break
 
-def evaluation_ports(original_subnets):
+def evaluation_ports1(original_subnets):
     """
     Given the port-centric features time-series, launch anomaly detection module in each subnetwork.
     Generate an evaluation file named eval_*feature* with the results.
     """
 
     for method in METHODS:
-        packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'csv'),
+        packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, '2', 'csv'),
                               dtype={'nb_packets': int})
         packets = packets[packets.nb_packets > N_MIN]
         subnets = original_subnets if method == 'separated' else ['all']
@@ -195,22 +195,17 @@ def evaluation_ports(original_subnets):
             os.mkdir(PATH_EVAL)
 
         ports = packets.port.unique()
-        batch_size = 50
 
         evaluations = {}
-        for ind_port, port in enumerate(ports):
-            if ind_port % batch_size == 0:
-                for feat in FEATURES:
-                    if ind_port != 0:
-                        evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
-                                                             N_MIN, N_DAYS, 'test2', 'csv'), sep=';', mode='a')
-                    if len(ports) > (ind_port + 1) * batch_size:
-                        evaluations[feat.attribute] = pd.DataFrame(columns=DATES[N_DAYS:], index=ports[ind_port * batch_size: (ind_port + 1) * batch_size])
-                    else:
-                        evaluations[feat.attribute] = pd.DataFrame(columns=DATES[N_DAYS:], index=ports[ind_port * batch_size:])
-                    evaluations[feat.attribute] = evaluations[feat.attribute].fillna('')
+        for feat in FEATURES:
+            evaluations[feat.attribute] = pd.DataFrame(columns=DATES[N_DAYS:], index=ports)
+            evaluations[feat.attribute] = evaluations[feat.attribute].fillna('')
 
+        for ind_port, port in enumerate(ports[2:]):
+            if ind_port % 1000 == 0:
+                print(ind_port)
             packets_port = packets[packets.port == port]
+
             for feat in FEATURES:
                 feat.reset_object()
                 feat.to_write += str(port) + ';'
@@ -231,6 +226,56 @@ def evaluation_ports(original_subnets):
                                 evaluations[feat.attribute].loc[port, date] += '+' + subnet + ','
                             elif mzscore < - T:
                                 evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
+
+        for feat in FEATURES:
+            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
+                                                         N_MIN, N_DAYS, '2', 'csv'), sep=';')
+
+def evaluation_ports2(original_subnets):
+    """
+    Given the port-centric features time-series, launch anomaly detection module in each subnetwork.
+    Generate an evaluation file named eval_*feature* with the results.
+    """
+    
+    for method in METHODS:
+        files = {}
+        for feat in FEATURES:
+            files[feat.attribute] = open(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
+                                                   N_MIN, N_DAYS, 'csv'), 'a')
+        packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'csv'),
+                              dtype={'nb_packets': int})
+        packets = packets[packets.nb_packets > N_MIN]
+        subnets = original_subnets if method == 'separated' else ['all']
+
+        if not os.path.exists(PATH_EVAL):
+            os.mkdir(PATH_EVAL)
+
+        ports = packets.port.unique()
+        for ind_port, port in enumerate(ports):
+            if ind_port % 1000 == 0:
+                print(ind_port)
+            packets_port = packets[packets.port == port]
+
+            for feat in FEATURES:
+                feat.reset_object()
+                for subnet in subnets:
+                    del feat.time_vect[:]
+                    packets_sub = (packets_port.copy() if method == 'agg'
+                                   else packets_port[packets_port.key == subnet])
+                    for i, date in enumerate(DATES):
+                        rep = packets_sub[packets_sub.date == int(date)]
+                        feat.time_vect.append(rep[feat.attribute].item()
+                                              if not rep.empty else np.nan)
+                        if i >= N_DAYS:
+                            median = np.nanmedian(feat.time_vect[i - N_DAYS:i])
+                            mad = np.nanmedian([np.abs(y - median)
+                                                for y in feat.time_vect[i - N_DAYS:i]])
+                            mzscore = 0.6745 * (feat.time_vect[i] - median) / mad
+                            if mzscore > T:
+                                feat.mzscores[date] += '+' + subnet + ','
+                            elif mzscore < - T:
+                                feat.mzscores[date] += '-' + subnet + ','
+                files[feat.attribute].write(str(port) + ';' + ';'.join([el[:-1] for el in feat.mzscores.values()]) + '\n')
 
 def get_nb_alarms(x):
     """Lambda function to get the number of anomalies given a list of anomalous subnets"""
@@ -256,7 +301,7 @@ def main(argv):
     # retrieve_subnets(original_subnets, sub_df)
 
     # compute_subnets(original_subnets, sub_df)
-    evaluation_ports(original_subnets)
+    evaluation_ports1(original_subnets)
     # evaluation_ports2(original_subnets)
     # eval_scores()
     return 0
