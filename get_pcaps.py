@@ -28,11 +28,11 @@ def recover_pcap_files():
 			else:
 				year = '2016'
 
-		if PERIOD == 2017:
-			if int(date) > 1000:
-				year = '2016'
-			else:
-				year = '2017'
+		# if PERIOD == 2017:
+		# 	if int(date) > 1000:
+		# 		year = '2016'
+		# 	else:
+		# 		year = '2017'
 
 		if PERIOD == 2018:
 			if int(date) > 1000:
@@ -40,6 +40,7 @@ def recover_pcap_files():
 			else:
 				year = '2018'
 			
+		year = '2018'
 		if not os.path.exists(PATH_PCAPS):
 			os.mkdir(PATH_PCAPS)
 		os.chdir(PATH_PCAPS)
