@@ -19,12 +19,6 @@ from settings import *
 from features import Feature, FEATURES
 import timeit
 
-def find_subnets(row):
-    if row['port_dst'] == 2323:
-        ip_dst = int(ipaddress.ip_address(row['IP_dst']))
-        seq = int(row['seq'])
-        print(ip_dst, seq, row['IP_dst'], ipaddress.ip_address(seq).__str__())
-
 def check_orphans(row, daily_subnets):
     """Check which packets do not belong to any identified MAWI subnetwork
     (neither source IP nor destination IP)."""
@@ -39,15 +33,7 @@ def check_orphans(row, daily_subnets):
                         or ip_dst in ipaddress.IPv4Network(k, strict=False)):
                     found = True
                     break
-    if not found:
-        # if '131' not in row['IP_src'] and '131' not in row['IP_dst'] and '157' not in row['IP_src'] and '157' not in row['IP_dst'] and '133.227' not in row['IP_src'] and '133.227' not in row['IP_dst'] and '130' not in row['IP_src'] and '130' not in row['IP_dst']:
-        #     print('not found', row['IP_src'], row['IP_dst'])
-        # if '202' in row['IP_src'] or '202' in row['IP_dst']:
-        #     print('not found', row['IP_src'], row['IP_dst'])
-
-    #     if row['port_src'] == 2323:
-    #         print(row['IP_src'], ipaddress.ip_address(row['ack']).__str__())
-        if row['port_dst'] == 23:
+    if not found and row['port_dst'] == 23:
             print(row['IP_dst'], ipaddress.ip_address(row['seq']).__str__())
 
 def keep_wide(ip_dst, original_subnets, daily_subnets):
@@ -62,13 +48,6 @@ def keep_wide(ip_dst, original_subnets, daily_subnets):
 def retrieve_subnets(original_subnets, sub_df):
     for date in DATES:
         period = PERIOD
-        # 1001 = first of October. From October to December -> 2017
-        # if PERIOD == 2016 and int(date) > 1000:
-        #     period = 2015
-        # if PERIOD == 2017 and int(date) > 1000:
-        #     period = 2016
-        # if PERIOD == 2018 and int(date) > 1000:
-        #     period = 2017
         daily_subnets = sub_df[sub_df.date == date].iloc[0, 1:].tolist()
         chunks = pd.read_csv(path_join(PATH_CSVS, 'data', str(period) + str(date), 'csv'),
                              chunksize=N_BATCH,
@@ -78,7 +57,6 @@ def retrieve_subnets(original_subnets, sub_df):
 
         for chunk in chunks:
             print(date)
-            # chunk.apply(find_subnets, axis=1)
             chunk.apply(check_orphans, args=(daily_subnets,), axis=1)
             break
 
@@ -221,7 +199,7 @@ def evaluation_ports(original_subnets):
                                 evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
 
         for feat in FEATURES:
-            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017', T,
+            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018', T,
                                                          N_MIN, N_DAYS, 'csv'), sep=';')
 
 def get_nb_alarms(x):
@@ -234,38 +212,32 @@ def get_nb_alarms(x):
 def eval_scores():
     """ In evaluation ports files: convert anomalous subnets to
     number of anomalous subnets (= number of anomalies)"""
-    # FEATURES.append(Feature('total'))
-
-    method = 'separated'
-    for feat in FEATURES:
-        ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2017',
-                                      T, N_MIN, N_DAYS, 'full', 'csv'), sep=';', index_col=0)
-        ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
-        ports.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2017',
-                               T, N_MIN, N_DAYS, 'score', 'csv'), sep=';')
+    for method in METHODS:
+        for feat in FEATURES:
+            ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
+                                          T, N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
+            ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
+            ports.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
+                                   T, N_MIN, N_DAYS, 'score', 'csv'), sep=';')
 
 def merge_datasets():
     method = 'separated'
     for feat in FEATURES:
-        dataset_1 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2016', T,
+        dataset_1 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-2017', T,
                                              N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        dataset_2 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2016-2', T,
+        dataset_2 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017', T,
                                              N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        dataset_3 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-2017', T,
-                                             N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        cols = list(dataset_1.columns) + list(dataset_2.columns) + list(dataset_3.columns)
-        print(cols)
-        temp = pd.concat([dataset_1, dataset_2], axis=1, sort=False)
-        result = pd.concat([temp, dataset_3], axis=1, sort=False)
-        result.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2017', T, N_MIN, N_DAYS, 'full', 'csv'), sep=';')
+        cols = list(dataset_1.columns) + list(dataset_2.columns)
+        result = pd.concat([dataset_1, dataset_2], axis=1, sort=False)
+        result.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017-full', T, N_MIN, N_DAYS, 'csv'), sep=';')
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
     # retrieve_subnets(original_subnets, sub_df)
 
-    compute_subnets(original_subnets, sub_df)
+    # compute_subnets(original_subnets, sub_df)
     # evaluation_ports(original_subnets)
-    # eval_scores()
+    eval_scores()
     # merge_datasets()
     return 0
 

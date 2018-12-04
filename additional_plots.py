@@ -223,17 +223,17 @@ def ecdf(data):
     return x_values, y_values
 
 def mse_ndays(subnets):
-    packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', '2016', 'csv'),
+    packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
                           dtype={'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
 
-    file = open(path_join(PATH_EVAL, 'mse_ndays', '2015-2016', 20, 'csv'), 'w')
+    file = open(path_join(PATH_EVAL, 'mse_ndays', PERIOD, 'csv'), 'w')
 
     for nb_day in NB_DAYS:
         for subnet in subnets:
             packets_subnet = packets[packets.key == subnet]
             ports = packets_subnet.port.unique()
-            for port in ports[:20]:
+            for port in ports:
                 packets_port = packets_subnet[packets_subnet.port == port]
                 for feat in FEATURES:
                     feat.reset_object()
@@ -272,7 +272,7 @@ def mse_ndays(subnets):
 
 # 1 courbe / feature
 def plot_mse_ndays():
-    mse = pd.read_csv(path_join(PATH_EVAL, 'mse_ndays', '2015-2016', 20, 'csv'),
+    mse = pd.read_csv(path_join(PATH_EVAL, 'mse_ndays', PERIOD, 'csv'),
                       dtype={'nb_packets': int}, names=['nb_day', 'feature', 'mean', 'median'])
 
     markers = ['.', ',', 'o', 'v', '^', '+', '1']
@@ -286,18 +286,26 @@ def plot_mse_ndays():
             results = value[tool].tolist()
             results = list(map(lambda x: round(x, 3), results))
             print(NB_DAYS, results)
-            ax_mse.plot(NB_DAYS, results, label=feat.attribute, marker=markers[i], linestyle=linestyles[i % 4])
+            legend = ''
+            if feat.attribute == 'src_div_index':
+                legend = 'srcDivIndex'
+            elif feat.attribute == 'dst_div_index':
+                legend = 'destDivIndex'
+            elif feat.attribute == 'port_div_index':
+                legend = 'portDivIndex'
+            elif feat.attribute == 'mean_size':
+                legend = 'meanSize'
+            elif feat.attribute == 'std_size':
+                legend = 'stdSize'
+            elif feat.attribute == 'nb_packets':
+                legend = 'nbPackets'
+            ax_mse.plot(NB_DAYS, results, label=legend, marker=markers[i], linestyle=linestyles[i % 4])
 
-        if tool == 'mean':
-            ax_mse.set_title('MSE per feature - Model: mean/std')
-        else:
-            ax_mse.set_title('MSE per feature - Model: median/mad')
         ax_mse.set_xlabel('Window size')
         ax_mse.set_ylabel(tool + ' MSE')
         ax_mse.set_xticks(NB_DAYS)
         ax_mse.set_xticklabels(NB_DAYS)
         ax_mse.legend()
-        # ax_mse.grid(True)
         fig_mse.savefig(path_join(PATH_FIGURES, tool + '_mse_feature_new', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=300)
 
 def correlation_features():
@@ -309,7 +317,7 @@ def correlation_features():
     ports = pd.DataFrame(columns=list(test.columns))
     for feat in FEATURES:
         feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                              'separated', '2016-2017', T, N_MIN,
+                              'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
         feat_df = feat_df.applymap(sign_to_score)
         ports = ports.add(feat_df, fill_value=0)
@@ -322,7 +330,7 @@ def correlation_features():
                 annotations = []
                 for feat in FEATURES:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                                'separated', '2016-2017', T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+                                'separated', PERIOD, T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
                     if port in list(evaluation.index):
                         rep = evaluation.loc[port, date]
                         if rep:
@@ -348,7 +356,7 @@ def correlation_features():
 def cor_features_output():
     feat_df = dict.fromkeys([feat.attribute for feat in FEATURES], pd.DataFrame())
     for feat in FEATURES:
-        ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', '2016',
+        ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, 'separated', PERIOD,
                                       T, N_MIN, N_DAYS, 'score', 'csv'), sep=';', index_col=0)
         feat_df[feat.attribute] = ports.applymap(sign_to_score)
 
@@ -431,7 +439,6 @@ def relevant_features():
         ports = ports.add(feat_df, fill_value=0)
 
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
-    print(ports)
 
     for index, row in ports.iterrows():
         for i, date in enumerate(DATES[N_DAYS:]):
@@ -473,13 +480,13 @@ def relevant_features():
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
-    # plot_time_series(original_subnets)
-    # compute_mse_feature(original_subnets)
+    plot_time_series(original_subnets)
+    compute_mse_feature(original_subnets)
     mse_ndays(subnets)
     plot_mse_ndays()
-    # correlation_features()
-    # cor_features_output()
-    # relevant_features()
+    correlation_features()
+    cor_features_output()
+    relevant_features()
     return 0
 
 if __name__ == '__main__':
