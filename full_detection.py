@@ -199,7 +199,7 @@ def evaluation_ports(original_subnets):
                                 evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
 
         for feat in FEATURES:
-            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018', T,
+            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017-ext', T,
                                                          N_MIN, N_DAYS, 'csv'), sep=';')
 
 def get_nb_alarms(x):
@@ -223,21 +223,26 @@ def eval_scores():
 def merge_datasets():
     method = 'separated'
     for feat in FEATURES:
-        dataset_1 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-2017', T,
+        dataset_1 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2016', T,
                                              N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        dataset_2 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017', T,
+        dataset_2 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2016-2', T,
                                              N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        cols = list(dataset_1.columns) + list(dataset_2.columns)
+        dataset_3 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-2017', T,
+                                             N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
+        dataset_3 = dataset_3.iloc[:, :30]
+        cols = list(dataset_1.columns) + list(dataset_2.columns) + list(dataset_3.columns)
         result = pd.concat([dataset_1, dataset_2], axis=1, sort=False)
-        result.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017-full', T, N_MIN, N_DAYS, 'csv'), sep=';')
+        result = pd.concat([result, dataset_3], axis=1, sort=False)
+
+        result.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-full', T, N_MIN, N_DAYS, 'csv'), sep=';')
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
     # retrieve_subnets(original_subnets, sub_df)
 
     # compute_subnets(original_subnets, sub_df)
-    # evaluation_ports(original_subnets)
-    eval_scores()
+    evaluation_ports(original_subnets)
+    # eval_scores()
     # merge_datasets()
     return 0
 

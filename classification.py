@@ -33,8 +33,19 @@ class Class_anomaly():
 
 def clustering_anomalies():
     list_annot = []
-    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
-                                        N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+    test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
+                              'separated', PERIOD, T, N_MIN,
+                               N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+
+    dataset_sum = pd.DataFrame(columns=list(test.columns))
+    for feat in FEATURES:
+        feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                              'separated', PERIOD, T, N_MIN,
+                               N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+        feat_df = feat_df.applymap(sign_to_score)
+        dataset_sum = dataset_sum.add(feat_df, fill_value=0)
+
+    ports_annot = dataset_sum
     ports = ports_annot.applymap(sign_to_score)
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
     labels = []
@@ -81,82 +92,61 @@ def clustering_anomalies():
 
 def classify_anomalies(classes):
     list_annot = []
-    ports_annot = pd.read_csv(path_join(PATH_EVAL, 'eval_total_separated', PERIOD, T, N_MIN,
-                                        N_DAYS, 'score', 'csv'), sep=';', index_col=0)
-    ports = ports_annot.applymap(sign_to_score)
+    test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
+                              'separated', PERIOD, T, N_MIN,
+                               N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+
+    dataset_sum = pd.DataFrame(columns=list(test.columns))
+    for feat in FEATURES:
+        feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                              'separated', PERIOD, T, N_MIN,
+                               N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+        feat_df = feat_df.applymap(sign_to_score)
+        dataset_sum = dataset_sum.add(feat_df, fill_value=0)
+
+    ports = dataset_sum.copy()
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
 
-    to_drop = ['nb_packets', 'SYN']
-    feats = FEATURES[:]
-    for feat in FEATURES:
-        for el in to_drop:
-            if feat.attribute == el:
-                feats.remove(feat)
+    # to_drop = ['SYN']
+    # feats = FEATURES[:]
+    # for feat in FEATURES:
+    #     for el in to_drop:
+    #         if feat.attribute == el:
+    #             feats.remove(feat)
 
     for index, row in ports.iterrows():
+        # print(row)
         for i, date in enumerate(DATES[N_DAYS:]):
+            # print(i, date)
             if row[i] > T_ANO:
                 annotations = [index, date]
-                for feat in feats:
+                for feat in FEATURES:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
-                                                       N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == index][date]
-                    annotations.extend([abs(int(rep.item().split(',')[sign])) for sign in range(2)]
-                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                                                       N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+                    if index in list(evaluation.index):
+                        rep = evaluation.loc[index, date]
+                        if rep:
+                            if str(rep) != 'nan':
+                                annotations.extend([int(rep.split(',')[sign]) for sign in range(2)])
+                            else:
+                                annotations.extend([0, 0])
+                    else:
+                        annotations.extend([0, 0])
                 list_annot.append(annotations)
+                # print(int(row[i]), annotations)
 
     columns = ['port', 'date']
-    columns.extend([sign + feat.attribute for feat in feats for sign in SIGNS])
+    columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
     heatmap = pd.DataFrame(list_annot, columns=columns)
-    print(heatmap)
-
-    heatmap['AS_1'] = 0
-    heatmap['AS_2'] = 0
-    heatmap['AS_3'] = 0
-
-    dict_features = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
-    dict_max = dict.fromkeys([sign + feat.attribute for feat in feats for sign in SIGNS], 0)
-
-    for index, row in heatmap.iterrows():
-        heatmap.iloc[index, 12] = sum(row[2:12])
-        for ind_f, feat in enumerate(feats):
-            if int(row[2 + ind_f * 2]) > 1 and int(row[3 + ind_f * 2]) == 0:
-                heatmap.iloc[index, 13] += 1
-                dict_features['+' + feat.attribute] += 1
-                if int(row[2 + ind_f * 2]) > dict_max['+' + feat.attribute]:
-                    dict_max['+' + feat.attribute] = int(row[2 + ind_f * 2])
-
-            elif int(row[3 + ind_f * 2]) > 1 and int(row[2 + ind_f * 2]) == 0:
-                heatmap.iloc[index, 13] += 1
-                dict_features['-' + feat.attribute] += 1
-                if int(row[3 + ind_f * 2]) > dict_max['-' + feat.attribute]:
-                    dict_max['-' + feat.attribute] = int(row[3 + ind_f * 2])
-
-    for index, row in heatmap.iterrows():
-        # if row[0] == 8888:
-        #     print('port 8888')
-        # if row[0] == 7001:
-        #     print('port 7001') 
-        for ind_f, feat in enumerate(feats):
-            result = np.abs(int(row[2 + ind_f * 2]) - int(row[3 + ind_f * 2]))
-            # if row[0] == 8888 or row[0] == 7001:
-            #     print('before', feat.attribute, result)
-            if int(row[2 + ind_f * 2]) > int(row[3 + ind_f * 2]):
-                result = result / (dict_features['+' + feat.attribute])  / (dict_max['+' + feat.attribute])
-            else:
-                result = result / (dict_features['-' + feat.attribute]) / (dict_max['-' + feat.attribute])
-            # if row[0] == 8888 or row[0] == 7001:
-            #     print('after', feat.attribute, result)
-            if not np.isnan(result) and not np.isinf(result):
-                heatmap.iloc[index, 14] += np.round(result, 2)
+    heatmap['AS'] = 0
 
     dict_categories = dict.fromkeys(range(len(heatmap.values)), '')
     for cl in classes:
         temp = heatmap.copy()
         for feat in cl.features:
             contrary_feat = SIGNS[(SIGNS.index(feat[0])+1)%2] + feat[1:]
-            temp = temp.loc[temp[feat] > 0]
+            temp = temp.loc[abs(temp[feat]) > 0]
             temp = temp.loc[temp[contrary_feat] == 0]
         
         ant = [cla.anomalies for cla in classes if cla.description == 'Botnet scan'][0]
@@ -177,7 +167,6 @@ def classify_anomalies(classes):
                 if type(ind) == int and heatmap.iloc[ind]['-port_div_index'] > 1 and heatmap.iloc[ind]['+port_div_index'] == 0:
                     new_index += ';spoofed port'
                 dict_categories[ind] = new_index
-
     for cl in classes:
         heatmap.rename(index=dict_categories, inplace=True)
     heatmap = heatmap.rename(index=str, columns={"-src_div_index": "-src", "+src_div_index": "+src",
@@ -186,20 +175,8 @@ def classify_anomalies(classes):
                                                  "-mean_size": "-meanSz", "+mean_size": "+meanSz",
                                                  "-std_size": "-stdSz", "+std_size": "+stdSz"})
     
-    heatmap = heatmap.sort_values(by='AS_1', ascending=False)
-    # print(heatmap)
-
-    heatmap = heatmap.sort_values(by='AS_2', ascending=False)
-    # print(heatmap)
-
-    heatmap = heatmap.sort_values(by='AS_3', ascending=False)
-    # print(heatmap)
-
-    print(heatmap.loc[heatmap['port'] == 23])
-
-    # temp = heatmap.loc[(heatmap['port'] == 2222) | (heatmap['port'] == 2000)]
-    # temp = temp.loc[(temp['date'] == '0104') | (temp['date'] == '0426')]
-    # print(temp)
+    heatmap = heatmap.sort_values(by='AS', ascending=False)
+    print(heatmap)
 
 def additional_infos(subnets):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),

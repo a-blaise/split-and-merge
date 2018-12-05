@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error
+import matplotlib.ticker as plticker
 
 from settings import *
 from features import FEATURES, FIGURES
@@ -159,7 +160,7 @@ def compute_mse_feature(original_subnets):
                 feat.reset_object()
 
     fig_mse_mean, ax_mse_mean = plt.subplots()
-    for feat in FEATURES:
+    for i, feat in enumerate(FEATURES):
         if feat.mse_mean:
             x_coordinates, y_coordinates = ecdf(feat.mse_mean)
             legend = ''
@@ -175,7 +176,7 @@ def compute_mse_feature(original_subnets):
                 legend = 'stdSize'
             elif feat.attribute == 'nb_packets':
                 legend = 'nbPackets'
-            ax_mse_mean.plot(x_coordinates, y_coordinates, label=legend)
+            ax_mse_mean.plot(x_coordinates, y_coordinates, label=legend, linestyle=LINESTYLES[i % 4])
 
     # ax_mse_mean.set_title('CDF MSE per feature - Model: mean/std')
     ax_mse_mean.set_xlabel('Mean Squared Error')
@@ -185,7 +186,7 @@ def compute_mse_feature(original_subnets):
     fig_mse_mean.savefig(path_join(PATH_FIGURES, 'ecdf_mean', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=300)
 
     fig_mse_median, ax_mse_median = plt.subplots()
-    for feat in FEATURES:
+    for i, feat in enumerate(FEATURES):
         if feat.mse_median:
             x_coordinates, y_coordinates = ecdf(feat.mse_median)
             legend = ''
@@ -201,7 +202,7 @@ def compute_mse_feature(original_subnets):
                 legend = 'stdSize'
             elif feat.attribute == 'nb_packets':
                 legend = 'nbPackets'
-            ax_mse_median.plot(x_coordinates, y_coordinates, label=legend)
+            ax_mse_median.plot(x_coordinates, y_coordinates, label=legend, linestyle=LINESTYLES[i % 4])
 
     # ax_mse_median.set_title('CDF MSE per feature - Model: median/mad')
     ax_mse_median.set_xlabel('Mean Squared Error')
@@ -275,9 +276,6 @@ def plot_mse_ndays():
     mse = pd.read_csv(path_join(PATH_EVAL, 'mse_ndays', PERIOD, 'csv'),
                       dtype={'nb_packets': int}, names=['nb_day', 'feature', 'mean', 'median'])
 
-    markers = ['.', ',', 'o', 'v', '^', '+', '1']
-    linestyles = ['-', '--', '-.', ':']
-
     tools = ['median', 'mean']
     for tool in tools:
         fig_mse, ax_mse = plt.subplots()
@@ -299,7 +297,7 @@ def plot_mse_ndays():
                 legend = 'stdSize'
             elif feat.attribute == 'nb_packets':
                 legend = 'nbPackets'
-            ax_mse.plot(NB_DAYS, results, label=legend, marker=markers[i], linestyle=linestyles[i % 4])
+            ax_mse.plot(NB_DAYS, results, label=legend, marker=MARKERS[i], linestyle=LINESTYLES[i % 4])
 
         ax_mse.set_xlabel('Window size')
         ax_mse.set_ylabel(tool + ' MSE')
@@ -477,16 +475,46 @@ def relevant_features():
                 dict_scores[feat.attribute] += 1
     print(dict_scores)
 
+def bars_comparative():
+    for feat in FEATURES:
+        for method in METHODS:
+            ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                          method, PERIOD, T, N_MIN,
+                                          N_DAYS, 'score', 'csv'), sep=';',
+                                          index_col=0)
+            ports = ports.applymap(sign_to_score)
+            results = {}
+            for i in range(len(ports.columns)):
+                res = ports.iloc[:, i]
+                temp = res.value_counts().to_dict()
+                results = {k: results.get(k, 0) + temp.get(k, 0) for k in set(results) | set(temp)}
+            print(feat.attribute, results)
+
+            fig, ax = plt.subplots()
+            rects = ax.bar(results.keys(), results.values())
+            ax.set_title(feat.attribute + 'split-and-merge')
+            ax.set_yscale("log")
+            ax.xaxis.set_major_locator(plticker.MaxNLocator(integer=True))
+            numbers_ports = {}
+            for el in results.keys():
+                numbers_ports[el] = ports[ports == el].index.tolist()
+            for i, rect in enumerate(rects):
+                height = rect.get_height()
+                k = list(results.keys())[i]
+            fig.savefig(path_join(PATH_FIGURES, feat.attribute, method, T, N_MIN, N_DAYS, PERIOD, 'png'),
+                        dpi=600, bbox_inches='tight')
+
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
-    plot_time_series(original_subnets)
-    compute_mse_feature(original_subnets)
-    mse_ndays(subnets)
-    plot_mse_ndays()
-    correlation_features()
-    cor_features_output()
-    relevant_features()
+    # plot_time_series(original_subnets)
+    # compute_mse_feature(original_subnets)
+    # mse_ndays(subnets)
+    # plot_mse_ndays()
+    # correlation_features()
+    # cor_features_output()
+    # relevant_features()
+    bars_comparative()
     return 0
 
 if __name__ == '__main__':

@@ -30,19 +30,20 @@ def value_to_yaxis(value):
 def heatmap_scores():
     """Draw a panorama of the occurrences of anomaly score
     (corresponds to the number of anomalies on one port for all features in all subnetworks)."""
-    dict_font = dict(ha='center', va='center', size=5)
+    dict_font = dict(ha='center', va='center', size=4)
     test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
-                              'separated', '2017-full', T, N_MIN,
+                              'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
 
     dataset_sum = pd.DataFrame(columns=list(test.columns))
     for feat in FEATURES:
         feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                              'separated', '2017-full', T, N_MIN,
+                              'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
         feat_df = feat_df.applymap(sign_to_score)
         dataset_sum = dataset_sum.add(feat_df, fill_value=0)
 
+    # dataset_sum = dataset_sum.iloc[:, :46]
     result = dataset_sum.apply(pd.Series.value_counts)
     print(result)
     result = result.iloc[1:]
@@ -54,21 +55,27 @@ def heatmap_scores():
     fig, axis = plt.subplots()
     image = axis.imshow(data, cmap='YlOrRd', aspect=.7)
 
-    axis.set_ylabel('Anomaly score', size=6)
-    axis.set_xlabel('Time', size=6)
+    axis.set_ylabel('Anomaly score', size=5)
+    axis.set_xlabel('Time', size=5)
 
     axis.set_yticks(np.arange(data.shape[0]))
     axis.set_xticks(np.arange(data.shape[1]))
 
-    axis.set_yticklabels([int(res) for res in result.index.values], size=5)
+    axis.set_yticklabels([int(res) for res in result.index.values], size=4)
     dates = []
     for i, x in enumerate(result.columns.values):
         result = x[0:2] + '/' + x[2:]
         dates.append(result)
     axis.set_xticklabels(dates)
 
+    axis.tick_params(width=0.5)
+
     # Rotate the tick labels and set their alignment.
-    plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor', size=5)
+    plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor', size=4)
+    axis.spines['bottom'].set_linewidth(0.5)
+    axis.spines['top'].set_linewidth(0.5)
+    axis.spines['left'].set_linewidth(0.5)
+    axis.spines['right'].set_linewidth(0.5)
 
     # Loop over data dimensions and create text annotations.
     for i in range(0, data.shape[0]):
@@ -79,7 +86,7 @@ def heatmap_scores():
 
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)
-    fig.savefig(path_join(PATH_FIGURES, 'heatmap', T, N_MIN, N_DAYS, PERIOD, 'png'),
+    fig.savefig(path_join(PATH_FIGURES, 'heatmap', N_MIN, N_DAYS, PERIOD, 'png'),
                 dpi=600, bbox_inches='tight')
 
 def get_sum_string(element):
