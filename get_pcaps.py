@@ -22,25 +22,7 @@ from settings import *
 def recover_pcap_files():
 	year = ''
 	for date in DATES:
-		if PERIOD == 2016:
-			if int(date) > 1000:
-				year = '2015'
-			else:
-				year = '2016'
-
-		# if PERIOD == 2017:
-		# 	if int(date) > 1000:
-		# 		year = '2016'
-		# 	else:
-		# 		year = '2017'
-
-		if PERIOD == 2018:
-			if int(date) > 1000:
-				year = '2017'
-			else:
-				year = '2018'
-			
-		year = '2018'
+		year = str(PERIOD)
 		if not os.path.exists(PATH_PCAPS):
 			os.mkdir(PATH_PCAPS)
 		os.chdir(PATH_PCAPS)

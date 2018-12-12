@@ -104,7 +104,7 @@ def compute_subnets(original_subnets, sub_df):
 
     # Create one file for the whole dataset (subnets aggregated)
     # and one for subnets not aggregated (separated)
-    files = [open(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'csv'), 'a') for method in METHODS]
+    files = [open(path_join(PATH_PACKETS, 'packets_subnets', method, 2018, 'csv'), 'a') for method in METHODS]
     elements = ['date', 'port', 'nb_packets', 'nb_src', 'nb_dst,' 'port_src', 'SYN+ACK', 'RST+ACK', 'FIN+ACK', 'SYN', 'ACK', 'RST', 'mean_ttl', 'mean_size', 'std_size',
                 'src_div_index', 'dst_div_index', 'port_div_index']
 
@@ -199,7 +199,7 @@ def evaluation_ports(original_subnets):
                                 evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
 
         for feat in FEATURES:
-            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2017-ext', T,
+            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018-2', T,
                                                          N_MIN, N_DAYS, 'csv'), sep=';')
 
 def get_nb_alarms(x):
@@ -214,7 +214,7 @@ def eval_scores():
     number of anomalous subnets (= number of anomalies)"""
     for method in METHODS:
         for feat in FEATURES:
-            ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
+            ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018-full',
                                           T, N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
             ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
             ports.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
@@ -223,26 +223,28 @@ def eval_scores():
 def merge_datasets():
     method = 'separated'
     for feat in FEATURES:
-        dataset_1 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2016', T,
+        dataset_1 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018', T,
                                              N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        dataset_2 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2015-2016-2', T,
+        dataset_2 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018-2', T,
                                              N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        dataset_3 = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-2017', T,
-                                             N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
-        dataset_3 = dataset_3.iloc[:, :30]
-        cols = list(dataset_1.columns) + list(dataset_2.columns) + list(dataset_3.columns)
-        result = pd.concat([dataset_1, dataset_2], axis=1, sort=False)
-        result = pd.concat([result, dataset_3], axis=1, sort=False)
 
-        result.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2016-full', T, N_MIN, N_DAYS, 'csv'), sep=';')
+        first_part = dataset_1.iloc[:, :14]
+        print(first_part.columns)
+        third_part = dataset_1.iloc[:, 25:]
+        print(third_part.columns)
+        cols = list(first_part.columns) + list(dataset_2.columns) + list(third_part.columns)
+        result = pd.concat([first_part, dataset_2], axis=1, sort=False)
+        result = pd.concat([result, third_part], axis=1, sort=False)
+
+        result.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018-full', T, N_MIN, N_DAYS, 'csv'), sep=';')
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
     # retrieve_subnets(original_subnets, sub_df)
 
     # compute_subnets(original_subnets, sub_df)
-    evaluation_ports(original_subnets)
-    # eval_scores()
+    # evaluation_ports(original_subnets)
+    eval_scores()
     # merge_datasets()
     return 0
 

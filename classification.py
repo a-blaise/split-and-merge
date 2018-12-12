@@ -115,9 +115,7 @@ def classify_anomalies(classes):
     #             feats.remove(feat)
 
     for index, row in ports.iterrows():
-        # print(row)
         for i, date in enumerate(DATES[N_DAYS:]):
-            # print(i, date)
             if row[i] > T_ANO:
                 annotations = [index, date]
                 for feat in FEATURES:
@@ -134,8 +132,7 @@ def classify_anomalies(classes):
                     else:
                         annotations.extend([0, 0])
                 list_annot.append(annotations)
-                # print(int(row[i]), annotations)
-
+                
     columns = ['port', 'date']
     columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
     heatmap = pd.DataFrame(list_annot, columns=columns)
@@ -175,7 +172,7 @@ def classify_anomalies(classes):
                                                  "-mean_size": "-meanSz", "+mean_size": "+meanSz",
                                                  "-std_size": "-stdSz", "+std_size": "+stdSz"})
     
-    heatmap = heatmap.sort_values(by='AS', ascending=False)
+    # heatmap = heatmap.sort_values(by='AS', ascending=False)
     print(heatmap)
 
 def additional_infos(subnets):
