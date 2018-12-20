@@ -45,32 +45,36 @@ def clustering_anomalies():
         feat_df = feat_df.applymap(sign_to_score)
         dataset_sum = dataset_sum.add(feat_df, fill_value=0)
 
-    ports_annot = dataset_sum
-    ports = ports_annot.applymap(sign_to_score)
+    ports = dataset_sum.copy()
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
-    labels = []
 
     for index, row in ports.iterrows():
         for i, date in enumerate(DATES[N_DAYS:]):
             if row[i] > T_ANO:
-                annotations = []
-                labels.append('port ' + str(index) + ' on ' + date[0:2] + '/' + date[2:])
+                annotations = [index, date]
                 for feat in FEATURES:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                                        'separated', PERIOD, T, N_MIN,
-                                                       N_DAYS, 'score', 'csv'), sep=';')
-                    rep = evaluation[evaluation.port == index][date]
-                    annotations.extend([int(rep.item().split(',')[sign]) for sign in range(2)]
-                                       if not rep.empty and str(rep.item()) != 'nan' else [0, 0])
+                                                       N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+                    if index in list(evaluation.index):
+                        rep = evaluation.loc[index, date]
+                        if str(rep) != 'nan':
+                            if rep:
+                                annotations.extend([int(rep.split(',')[sign]) for sign in range(2)])
+                            else:
+                                annotations.extend([0, 0])
+                    else:
+                        annotations.extend([0, 0])
                 list_annot.append(annotations)
 
-    heatmap = pd.DataFrame(list_annot, columns=[sign + feat.attribute for feat in FEATURES
-                                                for sign in SIGNS], index=labels)
+    columns = ['port', 'date']
+    columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
+    heatmap = pd.DataFrame(list_annot, columns=columns)
 
-    to_drop = ['nb_packets', 'SYN', 'port_div_index']
-    heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
+    # to_drop = ['port_div_index']
+    # heatmap = heatmap.drop([sign + feature for sign in SIGNS for feature in to_drop], axis=1)
 
-    epsilon = 2.3 # 2.5 pas mal mais pas encore assez précis
+    epsilon = 3.4
     heatmap_fit = StandardScaler().fit_transform(heatmap)
     dbscan = DBSCAN(eps=epsilon, min_samples=1).fit(heatmap_fit)
     labels = dbscan.labels_
@@ -103,16 +107,11 @@ def classify_anomalies(classes):
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
         feat_df = feat_df.applymap(sign_to_score)
         dataset_sum = dataset_sum.add(feat_df, fill_value=0)
+    dataset_sum.to_csv(path_join(PATH_EVAL, 'eval', 'all', 'separated', PERIOD,
+                                 T, N_MIN, N_DAYS, 'score', 'csv'), sep=';')
 
     ports = dataset_sum.copy()
     ports = ports.loc[(ports > T_ANO).any(axis=1)]
-
-    # to_drop = ['SYN']
-    # feats = FEATURES[:]
-    # for feat in FEATURES:
-    #     for el in to_drop:
-    #         if feat.attribute == el:
-    #             feats.remove(feat)
 
     for index, row in ports.iterrows():
         for i, date in enumerate(DATES[N_DAYS:]):
@@ -132,19 +131,18 @@ def classify_anomalies(classes):
                     else:
                         annotations.extend([0, 0])
                 list_annot.append(annotations)
-                
+
     columns = ['port', 'date']
     columns.extend([sign + feat.attribute for feat in FEATURES for sign in SIGNS])
     heatmap = pd.DataFrame(list_annot, columns=columns)
-    heatmap['AS'] = 0
 
     dict_categories = dict.fromkeys(range(len(heatmap.values)), '')
     for cl in classes:
         temp = heatmap.copy()
         for feat in cl.features:
             contrary_feat = SIGNS[(SIGNS.index(feat[0])+1)%2] + feat[1:]
-            temp = temp.loc[abs(temp[feat]) > 0]
-            temp = temp.loc[temp[contrary_feat] == 0]
+            temp = temp.loc[abs(temp[feat]) > 1]
+            temp = temp.loc[temp[contrary_feat] < 2]
         
         ant = [cla.anomalies for cla in classes if cla.description == 'Botnet scan'][0]
         if cl.antecedent:
@@ -172,14 +170,13 @@ def classify_anomalies(classes):
                                                  "-mean_size": "-meanSz", "+mean_size": "+meanSz",
                                                  "-std_size": "-stdSz", "+std_size": "+stdSz"})
     
-    # heatmap = heatmap.sort_values(by='AS', ascending=False)
     print(heatmap)
 
 def additional_infos(subnets):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
                           dtype={'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
-    anomalies = [Anomaly(2323, '0901'), Anomaly(2323, '0908'), Anomaly(2323, '0915')]
+    anomalies = [Anomaly(5555, '0215')]
 
     for an in anomalies:
         port = an.port
@@ -215,15 +212,16 @@ def additional_infos(subnets):
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
+    # peut etre if nb packets, then invert all next day
     
     classes = [Class_anomaly('More normal packets', ['+mean_size', '+std_size']),
                Class_anomaly('More forged packets', ['-mean_size', '-std_size']),
-               Class_anomaly('Large scan', ['-src_div_index', '+dst_div_index', '-mean_size']), # OK
-               Class_anomaly('DDoS', ['+src_div_index', '-dst_div_index']), # OK
-               Class_anomaly('Botnet scan', ['+src_div_index', '+dst_div_index', '-mean_size']), # OK
+               Class_anomaly('Large scan', ['-src_div_index', '+dst_div_index', '-mean_size']),
+               Class_anomaly('DDoS', ['+src_div_index', '-dst_div_index']),
+               Class_anomaly('Botnet scan', ['+src_div_index', '+dst_div_index', '-mean_size']),
                Class_anomaly('Botnet expansion', ['+src_div_index', '+dst_div_index', '-std_size']),
-               Class_anomaly('Less botnet scan', ['-src_div_index', '-dst_div_index']),
-               Class_anomaly('Normal behavior', ['-src_div_index', '-dst_div_index', '+mean_size', '+std_size'])]
+               Class_anomaly('Targeted scan', ['-src_div_index', '-dst_div_index']),
+               Class_anomaly('Less botnet scan', ['-src_div_index', '-dst_div_index', '+mean_size', '+std_size'])]
 
     # clustering_anomalies()
     classify_anomalies(classes)

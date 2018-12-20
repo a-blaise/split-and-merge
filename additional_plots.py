@@ -28,7 +28,7 @@ def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)
-    pdf = PdfPages(path_join(PATH_FIGURES, 'time_series', 'pdf'))
+    # pdf = PdfPages(path_join(PATH_FIGURES, 'time_series', 'pdf'))
 
     for method in METHODS:
         packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets', method, PERIOD, 'csv'),
@@ -36,13 +36,14 @@ def plot_time_series(original_subnets):
                                      'nb_dst': int, 'div_index_src': float, 'div_index_dst': float,
                                      'SYN': float, 'mean_size': float, 'std_size': float})
         packets = packets[packets.nb_packets > N_MIN]
-        ports = packets.port.unique()
+        # ports = packets.port.unique()
+        ports = [3389]
 
         # Plot only the results for the first ten ports
-        for port in ports[:10]:
+        for port in ports:
             packets_port = packets[packets.port == port]
             for fig in FIGURES:
-                if method == 'aggregated':
+                if method == 'agg':
                     fig.reset_object()
                     for date in DATES:
                         rep = packets_port[packets_port.date == int(date)]
@@ -51,16 +52,16 @@ def plot_time_series(original_subnets):
                         fig.time_vect = fig.time_vect.fillna(0)
                     fig.init_figs()
                     fig.sub_time_vect['Whole network'] = fig.time_vect
-                    fig.ax_a.plot(x, fig.time_vect, '-', label='Whole network')
+                    fig.ax_a.plot(DATES, fig.time_vect, '-', label='Whole network')
                     fig.ax_a.set_xlabel('Time')
                     fig.ax_a.set_ylabel(' '.join([fig.legend, 'on port', str(port), 'aggregated']))
-                    fig.ax_a.set_xticks(x)
+                    fig.ax_a.set_xticks(DATES)
                     fig.ax_a.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), DATES))
                     plt.setp(fig.ax_a.get_xticklabels(), rotation=45, ha='right',
                              rotation_mode='anchor')
                     lgd = fig.ax_a.legend()
-                    fig.fig_a.savefig(pdf, format='pdf', dpi=600, bbox_extra_artists=(lgd,),
-                                      bbox_inches='tight')
+                    # fig.fig_a.savefig(pdf, format='pdf', dpi=600, bbox_extra_artists=(lgd,),
+                    #                   bbox_inches='tight')
                     ax_totake = fig.ax_z_a
                     fig_totake = fig.fig_z_a
                 else:
@@ -74,32 +75,55 @@ def plot_time_series(original_subnets):
                         if fig.attribute == 'nb_packets':
                             fig.time_vect = fig.time_vect.fillna(0)
                         fig.sub_time_vect[subnet] = fig.time_vect
-                        fig.ax.plot(x, fig.time_vect, '-', label=str(subnet))
+                        fig.ax.plot(DATES, fig.time_vect, '-', label=str(subnet))
                     fig.ax.set_xlabel('Time')
                     fig.ax.set_ylabel(' '.join([fig.legend, 'on port', str(port),
                                                 'not aggregated']))
-                    fig.ax.set_xticks(x)
+                    fig.ax.set_xticks(DATES)
                     fig.ax.set_xticklabels(map(lambda x: '/'.join([x[0:2], x[2:]]), DATES))
                     plt.setp(fig.ax.get_xticklabels(), rotation=45, ha='right',
                              rotation_mode='anchor')
                     lgd = fig.ax.legend(handletextpad=0.1, labelspacing=0.24, loc='upper center',
                                         bbox_to_anchor=(0.48, 1.27),
                                         fancybox=True, shadow=True, ncol=2)
-                    fig.fig.savefig(pdf, format='pdf', dpi=600, bbox_extra_artists=(lgd,),
-                                    bbox_inches='tight')
+                    # fig.fig.savefig(pdf, format='pdf', dpi=600, bbox_extra_artists=(lgd,),
+                    #                 bbox_inches='tight')
                     ax_totake = fig.ax_z
                     fig_totake = fig.fig_z
 
+                # for feat in FEATURES:
+                #     feat.reset_object()
+                #     feat.to_write += str(port) + ';'
+                #     for subnet in subnets:
+                #         del feat.time_vect[:]
+                #         packets_sub = (packets_port.copy() if method == 'agg'
+                #                        else packets_port[packets_port.key == subnet])
+                #         for i, date in enumerate(DATES):
+                #             rep = packets_sub[packets_sub.date == int(date)]
+                #             feat.time_vect.append(rep[feat.attribute].item()
+                #                                   if not rep.empty else np.nan)
+                #             if i >= N_DAYS:
+                #                 median = np.nanmedian(feat.time_vect[i - N_DAYS:i])
+                #                 mad = np.nanmedian([np.abs(y - median)
+                #                                     for y in feat.time_vect[i - N_DAYS:i]])
+                #                 mzscore = 0.6745 * (feat.time_vect[i] - median) / mad
+                #                 if mzscore > T:
+                #                     evaluations[feat.attribute].loc[port, date] += '+' + subnet + ','
+                #                 elif mzscore < - T:
+                #                     evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
+
                 for subnet, values in fig.sub_time_vect.items():
                     for i in range(N_DAYS, len(values)):
-                        median = np.nanmedian(values[i - N_DAYS:i-1])
-                        mad = np.nanmedian([np.abs(y - median) for y in values[i - N_DAYS:i-1]])
+                        median = np.nanmedian(values[i - N_DAYS:i])
+                        mad = np.nanmedian([np.abs(y - median) for y in values[i - N_DAYS:i]])
                         fig.mzscores[DATES[i]] = [0.6745 * (values[i] - median) / mad]
-                    ax_totake.plot(y, fig.mzscores.values(), label=subnet)
+                        # print(fig.attribute, subnet, fig.mzscores[DATES[i]])
+                    print(fig.attribute, subnet, fig.mzscores.values())
+                    ax_totake.plot(DATES[N_DAYS:], fig.mzscores.values(), label=subnet)
                 ax_totake.set_xlabel('Time')
                 ax_totake.set_ylabel(' '.join(['Moving Z-score for', fig.legend, 'on port',
                                                str(port), 'not aggregated']))
-                ax_totake.set_xticks(y)
+                ax_totake.set_xticks(DATES[N_DAYS:])    
                 ax_totake.set_xticklabels(map(lambda x: x[0:2] + '/' + x[2:], DATES[N_DAYS:]))
                 ax_totake.axhline(y=T, color='r')
                 ax_totake.axhline(y=-T, color='r')
@@ -110,9 +134,10 @@ def plot_time_series(original_subnets):
                 lgd = ax_totake.legend(handletextpad=0.1, labelspacing=0.24, loc='upper center',
                                        bbox_to_anchor=(0.48, 1.27),
                                        fancybox=True, shadow=True, ncol=2)
-                fig_totake.savefig(pdf, format='pdf', dpi=600, bbox_extra_artists=(lgd,),
-                                   bbox_inches='tight')
-    pdf.close()
+                # fig_totake.savefig(pdf, format='pdf', dpi=600, bbox_extra_artists=(lgd,),
+                #                    bbox_inches='tight')
+                plt.show()
+    # pdf.close()
 
 def gauss(h_bin):
     return 1 / np.sqrt(2 * np.pi) * np.exp(- (h_bin / 2)**2)
@@ -273,7 +298,7 @@ def mse_ndays(subnets):
 
 # 1 courbe / feature
 def plot_mse_ndays():
-    mse = pd.read_csv(path_join(PATH_EVAL, 'mse_ndays', PERIOD, 'csv'),
+    mse = pd.read_csv(path_join(PATH_EVAL, 'mse_ndays', '2015-2016', N_MIN, 'csv'),
                       dtype={'nb_packets': int}, names=['nb_day', 'feature', 'mean', 'median'])
 
     tools = ['median', 'mean']
@@ -309,7 +334,7 @@ def plot_mse_ndays():
 def correlation_features():
     list_annotations = []
     test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
-                              'separated', '2016-2017', T, N_MIN,
+                              'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
 
     ports = pd.DataFrame(columns=list(test.columns))
@@ -348,7 +373,7 @@ def correlation_features():
             for sign_2 in SIGNS:
                 rho_s, p_s = spearmanr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
                 rho_p, p_p = pearsonr(heatmap[sign_1 + feat_1], heatmap[sign_2 + feat_2])
-                if np.abs(rho_s) > 0.5:
+                if np.abs(rho_s) > 0.7:
                     print(sign_1 + feat_1, sign_2 + feat_2, round(rho_s * 100, 1))
 
 def cor_features_output():
@@ -359,7 +384,9 @@ def cor_features_output():
         feat_df[feat.attribute] = ports.applymap(sign_to_score)
 
     combinations = [FEATURES]
+    labels = ['all']
     for feat in FEATURES:
+        labels.append(feat.attribute)
         temp = FEATURES[:]
         temp.remove(feat)
         combinations.append(temp)
@@ -378,8 +405,7 @@ def cor_features_output():
                     ind_thr.append('|'.join([str(port), date, str(row[i])]))
         threshold_ano[str(l)] = ind_thr
         all_ano[str(l)] = ind_all
-
-    print(all_ano.values())
+    print(threshold_ano.values())
 
     unique_ano = set(['|'.join(el.split('|')[:-1]) for thr in threshold_ano.values() for el in thr])
     final_array = pd.DataFrame(index=unique_ano, columns=[str(l) for l in combinations],
@@ -400,21 +426,19 @@ def cor_features_output():
     axis.set_xticks(np.arange(len(combinations)))
     axis.set_yticks(np.arange(len(unique_ano)))
 
-    labels = ['all']
-    labels.extend([feat.attribute for feat in FEATURES])
     axis.set_xticklabels(labels)
     axis.set_yticklabels([an.split('|')[0] + ' - ' + an.split('|')[1][0:2] + '/'
                           + an.split('|')[1][2:] for an in unique_ano])
-    axis.tick_params(axis='both', which='major', labelsize=6)
+    axis.tick_params(axis='both', which='major', labelsize=5)
     plt.setp(axis.get_xticklabels(), rotation=35, ha='right',
              rotation_mode='anchor')
 
     for i in range(len(unique_ano)):
         for j in range(len(combinations)):
             color = 'b' if final[i, j] > T_ANO else 'c'
-            text = axis.text(j, i, final[i, j], ha='center', va='center', color=color, size=6)
+            text = axis.text(j, i, final[i, j], ha='center', va='center', color=color, size=5)
 
-    axis.set_title('Intensity of anomalies with features varying', size=6)
+    axis.set_title('Intensity of anomalies with features varying', size=5)
     fig.savefig(path_join(PATH_FIGURES, 'cor_features', T, N_MIN, N_DAYS, PERIOD, 'png'),
                 dpi=600, bbox_inches='tight')
 
@@ -425,13 +449,13 @@ def cor_features_output():
 def relevant_features():
     list_annot = []
     test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
-                              'separated', '2016-2017', T, N_MIN,
+                              'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
 
     ports = pd.DataFrame(columns=list(test.columns))
     for feat in FEATURES:
         feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                              'separated', '2016-2017', T, N_MIN,
+                              'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
         feat_df = feat_df.applymap(sign_to_score)
         ports = ports.add(feat_df, fill_value=0)
@@ -444,8 +468,9 @@ def relevant_features():
                 annotations = [index, date]
                 for feat in FEATURES:
                     evaluation = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                                                       'separated', '2016-2017', T, N_MIN,
-                                                       N_DAYS, 'score', 'csv'), sep=';')
+                                                       'separated', PERIOD, T, N_MIN,
+                                                       N_DAYS, 'score', 'csv'), sep=';',
+                                                       index_col=0)
                     if index in list(evaluation.index):
                         rep = evaluation.loc[index][date]
                         if rep:
@@ -469,14 +494,15 @@ def relevant_features():
     dict_scores = dict.fromkeys([feat.attribute for feat in FEATURES], 0)
     for index, row in heatmap.iterrows():
         for ind_f, feat in enumerate(FEATURES):
-            if int(row[2 + ind_f * 2]) > 0 and int(row[2 + ind_f * 2 + 1]) == 0:
+            if abs(int(row[2 + ind_f * 2])) > 1 and int(row[2 + ind_f * 2 + 1]) == 0:
                 dict_scores[feat.attribute] += 1
-            if int(row[2 + ind_f * 2 + 1]) > 0 and int(row[2 + ind_f * 2]) == 0:
+            if abs(int(row[2 + ind_f * 2 + 1])) > 1 and int(row[2 + ind_f * 2]) == 0:
                 dict_scores[feat.attribute] += 1
     print(dict_scores)
 
 def bars_comparative():
     for feat in FEATURES:
+        fig, ax = plt.subplots()
         for method in METHODS:
             ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
                                           method, PERIOD, T, N_MIN,
@@ -489,20 +515,21 @@ def bars_comparative():
                 temp = res.value_counts().to_dict()
                 results = {k: results.get(k, 0) + temp.get(k, 0) for k in set(results) | set(temp)}
             print(feat.attribute, results)
-
-            fig, ax = plt.subplots()
-            rects = ax.bar(results.keys(), results.values())
-            ax.set_title(feat.attribute + 'split-and-merge')
+            
+            legend = 'Aggregated view' if method == 'agg' else 'Splitted view'
+            rects = ax.bar(results.keys(), results.values(), label=legend)
             ax.set_yscale("log")
             ax.xaxis.set_major_locator(plticker.MaxNLocator(integer=True))
             numbers_ports = {}
             for el in results.keys():
                 numbers_ports[el] = ports[ports == el].index.tolist()
-            for i, rect in enumerate(rects):
+            for rect in rects:
                 height = rect.get_height()
-                k = list(results.keys())[i]
-            fig.savefig(path_join(PATH_FIGURES, feat.attribute, method, T, N_MIN, N_DAYS, PERIOD, 'png'),
-                        dpi=600, bbox_inches='tight')
+                ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                        '%d' % int(height), ha='center', va='bottom', size=7)
+        ax.legend()
+        fig.savefig(path_join(PATH_FIGURES, feat.attribute, method, T, N_MIN, N_DAYS, PERIOD, 'png'),
+                    dpi=600, bbox_inches='tight')
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()

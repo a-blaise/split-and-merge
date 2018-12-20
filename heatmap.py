@@ -83,14 +83,14 @@ def heatmap_scores():
                 arrow_properties = dict(arrowstyle="->", lw=0.4)
                 SIZE = 3.5
 
-                # if i > 13:
-                #     score = result.iloc[i,j]
-                #     df = dataset_sum.iloc[:, j]
-                #     port = df[df == score].index[0]
-                #     per = value[(value.date == int(DATES[N_DAYS + j])) & (value.port == int(port))]['nb_packets'] / 10 ** 6 * 1000
-                #     if len(list(per.to_dict().values())) > 0:
-                #         print(round(list(per.to_dict().values())[0], 2), int(port), int(DATES[N_DAYS + j]))
-                #     per = round(per, 2)
+                if i > 10:
+                    score = result.iloc[i,j]
+                    df = dataset_sum.iloc[:, j]
+                    port = df[df == score].index[0]
+                    per = value[(value.date == int(DATES[N_DAYS + j])) & (value.port == int(port))]['nb_packets'] / 10 ** 6 * 1000
+                    if len(list(per.to_dict().values())) > 0:
+                        print(round(list(per.to_dict().values())[0], 2), int(port), int(DATES[N_DAYS + j]))
+                    per = round(per, 2)
 
                 # 2016
                 # axis.annotate('DROWN attack', size=SIZE, xy=(0.5, 17), xytext=(2, 16), arrowprops=arrow_properties, )
@@ -128,22 +128,24 @@ def heatmap_scores():
                 # text = axis.text(45, 14.3, 'port 52869 - <0.1 %', color='black', size=SIZE)
 
                 # 2018
-                # axis.annotate('Massive scan', size=SIZE, xy=(5, 14.5), xytext=(5, 13), arrowprops=arrow_properties)
-                # axis.annotate('Massive scan', size=SIZE, xy=(9, 15.5), xytext=(5, 13), arrowprops=arrow_properties)
-                # text = axis.text(5, 13.8, 'port 81 - 0.5 %', color='black', size=SIZE)
-                # axis.annotate('ADB exploit', size=SIZE, xy=(6, 15), xytext=(3.5, 17), arrowprops=arrow_properties)
-                # text = axis.text(3.5, 17.8, 'port 5555 - 0.6 %', color='black', size=SIZE)
-                # axis.annotate('Massive scan', size=SIZE, xy=(13, 16.5), xytext=(11.5, 14), arrowprops=arrow_properties)
-                # text = axis.text(11.5, 14.8, 'port 2000 - 2.8 %', color='black', size=SIZE)
-                # axis.annotate('Hajime scan', size=SIZE, xy=(12.5, 18), xytext=(9.5, 15.5), arrowprops=arrow_properties)
-                # text = axis.text(9.5, 16.3, 'port 8291 - 0.3 %', color='black', size=SIZE)
-                # axis.annotate('Scan break', size=SIZE, xy=(17, 15.5), xytext=(17.5, 17), arrowprops=arrow_properties)
-                # axis.annotate('Scan break', size=SIZE, xy=(16, 16.5), xytext=(17.5, 17), arrowprops=arrow_properties)
-                # text = axis.text(17.5, 17.8, 'port 8291 - 0.3 %', color='black', size=SIZE)
-                # axis.annotate('Exploit', size=SIZE, xy=(25, 15.5), xytext=(26, 17), arrowprops=arrow_properties)
-                # text = axis.text(26, 17.8, 'port 60001 - 0.2 %', color='black', size=SIZE)
-                # axis.annotate('Credential leak', size=SIZE, xy=(35, 15.5), xytext=(37, 17), arrowprops=arrow_properties)
-                # text = axis.text(37, 17.8, 'port 80000 - 0.3 %', color='black', size=SIZE)
+                axis.annotate('Massive scan', size=SIZE, xy=(5, 14.5), xytext=(5, 13), arrowprops=arrow_properties)
+                axis.annotate('Massive scan', size=SIZE, xy=(9, 15.5), xytext=(5, 13), arrowprops=arrow_properties)
+                text = axis.text(5, 13.8, 'port 81 - 0.5 %', color='black', size=SIZE)
+                axis.annotate('Memcached', size=SIZE, xy=(7.8, 11.8), xytext=(9.1, 12.3), arrowprops=arrow_properties)
+                text = axis.text(9.1, 13, 'port 11211 - 0.2%', color='black', size=SIZE)
+                axis.annotate('ADB.Miner', size=SIZE, xy=(6.2, 15.5), xytext=(2.5, 16.5), arrowprops=arrow_properties)
+                text = axis.text(2.5, 17.3, 'port 5555 - 0.6 %', color='black', size=SIZE)
+                axis.annotate('Massive scan', size=SIZE, xy=(13, 16.5), xytext=(11.5, 14.5), arrowprops=arrow_properties)
+                text = axis.text(11.5, 15.3, 'port 2000 - 2.8 %', color='black', size=SIZE)
+                axis.annotate('Hajime scan', size=SIZE, xy=(12.5, 18), xytext=(8, 17.5), arrowprops=arrow_properties)
+                text = axis.text(8, 18.3, 'port 8291 - 0.3 %', color='black', size=SIZE)
+                axis.annotate('Scan break', size=SIZE, xy=(17, 15.5), xytext=(18, 17), arrowprops=arrow_properties)
+                axis.annotate('Scan break', size=SIZE, xy=(16, 16.5), xytext=(18, 17), arrowprops=arrow_properties)
+                text = axis.text(18, 17.8, 'port 23 - 23.7 %', color='black', size=SIZE)
+                axis.annotate('Exploit', size=SIZE, xy=(25, 15.5), xytext=(26, 17), arrowprops=arrow_properties)
+                text = axis.text(26, 17.8, 'port 60001 - 0.2 %', color='black', size=SIZE)
+                axis.annotate('Credential leak (Netwave)', size=SIZE, xy=(35, 15.5), xytext=(37, 17), arrowprops=arrow_properties)
+                text = axis.text(37, 17.8, 'port 8000 - 0.3 %', color='black', size=SIZE)
 
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)

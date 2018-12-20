@@ -135,12 +135,12 @@ def plot_results(type_comparison):
     axis.set_xticks([inter - 4 for inter in intervals])
     axis.set_xticklabels(intervals)
 
-    axis.set_xlabel('Number of days in the model (N_DAYS)' if type_comparison == 'N_DAYS'
-                    else 'Minimum number of packets to keep the port (N_MIN)')
-    axis.set_ylabel('Number of anomalies for this parameter')
+    axis.set_xlabel(r'$N_{days}$' if type_comparison == 'N_DAYS'
+                    else r'$N_{min}$')
+    axis.set_ylabel('Number of anomalies')
     axis.legend()
 
-    fig.savefig(path_join(PATH_FIGURES, 'results', type_comparison, T_ANO, 'png'), dpi=300)
+    fig.savefig(path_join(PATH_FIGURES, 'results', type_comparison, 'png'), dpi=300)
 
 def comparison(type_comparison, baseline, intervals):
     files = {}
@@ -168,8 +168,7 @@ def comparison(type_comparison, baseline, intervals):
     axis.bar(intervals, list_over, width=bin_width)
     axis.bar(intervals, list_under, width=bin_width)
     axis.set_xticks(intervals)
-    axis.set_xlabel('Number of days in the model (N_DAYS)' if type_comparison == 'N_DAYS'
-                    else 'Minimum number of packets to keep the port (N_MIN)')
+    axis.set_xlabel(r'N_DAYS' if type_comparison == 'N_DAYS' else r'N_MIN')
     axis.set_ylabel('Number of anomalies in +/- compared to baseline')
     fig.savefig(path_join(PATH_FIGURES, 'comparison', type_comparison,
                           T_ANO, 'png'), dpi=300)
@@ -311,14 +310,14 @@ def additional_infos(subnets):
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
-    # anomalies_ndays(subnets)
+    anomalies_ndays(subnets)
     # anomalies_nmins(subnets)
 
     baseline_day = 10
     baseline_min = 20
 
-    plot_results('N_DAYS')
-    plot_results('N_MIN')
+    # plot_results('N_DAYS')
+    # plot_results('N_MIN')
 
     # comparison('N_DAYS', baseline_day)
     # comparison_threshold('N_DAYS', baseline_day)
