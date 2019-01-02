@@ -30,7 +30,8 @@ def value_to_yaxis(value):
 def heatmap_scores():
     """Draw a panorama of the occurrences of anomaly score
     (corresponds to the number of anomalies on one port for all features in all subnetworks)."""
-    dict_font = dict(ha='center', va='center', size=4)
+    dict_font = dict(ha='center', va='center')
+        # , size=4)
     test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
                               'separated', PERIOD, T, N_MIN,
                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
@@ -49,24 +50,25 @@ def heatmap_scores():
     result.apply(value_to_yaxis, axis=1)
     data_annot = np.array(annot_matrix)
     data = np.array(result)
+    
+    fig, axis = plt.subplots(figsize=(15, 4))
+    image = axis.imshow(data, aspect=0.5, cmap='YlOrRd', vmax=30)
 
-    fig, axis = plt.subplots()
-    image = axis.imshow(data, cmap='YlOrRd', aspect=.7)
-
-    axis.set_ylabel('Anomaly score', size=5)
-    axis.set_xlabel('Time', size=5)
+    axis.set_ylabel('Anomaly score')
+    axis.set_xlabel('Time')
 
     axis.set_yticks(np.arange(data.shape[0]))
     axis.set_xticks(np.arange(data.shape[1]))
 
-    axis.set_yticklabels([int(res) for res in result.index.values], size=4)
-    dates = []
+    axis.set_yticklabels([int(res) for res in result.index.values])
+    # , size=4)
     axis.set_xticklabels(x[0:2] + '/' + x[2:] for i, x in enumerate(result.columns.values))
-
-    axis.tick_params(width=0.5)
+    axis.tick_params(width=0.55)
 
     # Rotate the tick labels and set their alignment.
-    plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor', size=4)
+    plt.setp(axis.get_xticklabels(), rotation=40, ha='right', rotation_mode='anchor')
+        # , size=4)
+    plt.tight_layout()
     axis.spines['bottom'].set_linewidth(0.5)
     axis.spines['top'].set_linewidth(0.5)
     axis.spines['left'].set_linewidth(0.5)
@@ -81,75 +83,115 @@ def heatmap_scores():
                 color = 'white' if i > 14 else 'black'
                 text = axis.text(j, i, int(data_annot[i, j]), fontdict=dict_font, color=color)
                 arrow_properties = dict(arrowstyle="->", lw=0.4)
-                SIZE = 3.5
 
-                if i > 10:
-                    score = result.iloc[i,j]
-                    df = dataset_sum.iloc[:, j]
-                    port = df[df == score].index[0]
-                    per = value[(value.date == int(DATES[N_DAYS + j])) & (value.port == int(port))]['nb_packets'] / 10 ** 6 * 1000
-                    if len(list(per.to_dict().values())) > 0:
-                        print(round(list(per.to_dict().values())[0], 2), int(port), int(DATES[N_DAYS + j]))
-                    per = round(per, 2)
+                # if i > 10:
+                #     score = result.iloc[i,j]
+                #     df = dataset_sum.iloc[:, j]
+                #     port = df[df == score].index[0]
+                #     per = value[(value.date == int(DATES[N_DAYS + j])) & (value.port == int(port))]['nb_packets'] / 10 ** 6 * 1000
+                #     # if len(list(per.to_dict().values())) > 0:
+                #     #     print(round(list(per.to_dict().values())[0], 2), int(port), int(DATES[N_DAYS + j]))
+                #     per = round(per, 2)
 
-                # 2016
-                # axis.annotate('DROWN attack', size=SIZE, xy=(0.5, 17), xytext=(2, 16), arrowprops=arrow_properties, )
-                # text = axis.text(2, 16.7, 'port 993 - 0.4 %', color='black', size=SIZE)
-                # axis.annotate('Abnormal activity', size=SIZE, xy=(13, 16.5), xytext=(8, 19), arrowprops=arrow_properties, )
-                # text = axis.text(8, 19.7, 'port 6379 - 0.8 %', color='black', size=SIZE)
-                # axis.annotate('Infiltration attempt', size=SIZE, xy=(19, 17.5), xytext=(16.5, 14), arrowprops=arrow_properties, )
-                # text = axis.text(16.5, 14.7, 'port 6379 - 1.4 %', color='black', size=SIZE)
-                # axis.annotate('Mirai scan', size=SIZE, xy=(24, 18.5), xytext=(25, 17), arrowprops=arrow_properties, )
-                # text = axis.text(25, 17.7, 'port 23 - 39.4 %', color='black', size=SIZE)
-                # axis.annotate('Mirai scan', size=SIZE, xy=(30.5, 20), xytext=(31.5, 19), arrowprops=arrow_properties, )
-                # text = axis.text(31.5, 19.7, 'port 2323 - 5.0 %', color='black', size=SIZE)
-                # axis.annotate('Mirai variant', size=SIZE, xy=(42, 20.5), xytext=(37, 18.5), arrowprops=arrow_properties, )
-                # text = axis.text(37, 19.2, 'port 7547 - 4.5 %', color='black', size=SIZE)
-                # axis.annotate('Mirai variant', size=SIZE, xy=(44, 17.5), xytext=(37, 15), arrowprops=arrow_properties, )
-                # text = axis.text(37, 15.7, 'port 23231 - 8.9 %', color='black', size=SIZE)
-                # axis.annotate('Mirai variant', size=SIZE, xy=(45, 17.5), xytext=(39, 13), arrowprops=arrow_properties, )
-                # text = axis.text(39, 13.7, 'port 6789 - 10.2 %', color='black', size=SIZE)
+                if PERIOD == 2016:
+                    axis.annotate('DROWN attack', xy=(0.5, 17), xytext=(2, 16), arrowprops=arrow_properties, )
+                    text = axis.text(2, 16.7, 'port 993 - 0.4 %', color='black')
+                    axis.annotate('Abnormal activity', xy=(13, 16.5), xytext=(8, 19), arrowprops=arrow_properties, )
+                    text = axis.text(8, 19.7, 'port 6379 - 0.8 %', color='black')
+                    axis.annotate('Infiltration attempt', xy=(19, 17.5), xytext=(16.5, 14), arrowprops=arrow_properties, )
+                    text = axis.text(16.5, 14.7, 'port 6379 - 1.4 %', color='black')
+                    axis.annotate('Mirai scan', xy=(24, 18.5), xytext=(25, 17), arrowprops=arrow_properties, )
+                    text = axis.text(25, 17.7, 'port 23 - 39.4 %', color='black')
+                    axis.annotate('Mirai scan', xy=(30.5, 20), xytext=(31.5, 19), arrowprops=arrow_properties, )
+                    text = axis.text(31.5, 19.7, 'port 2323 - 5.0 %', color='black')
+                    axis.annotate('Mirai variant', xy=(42, 20.5), xytext=(37, 18.5), arrowprops=arrow_properties, )
+                    text = axis.text(37, 19.2, 'port 7547 - 4.5 %', color='black')
+                    axis.annotate('Mirai variant', xy=(44, 17.5), xytext=(37, 15), arrowprops=arrow_properties, )
+                    text = axis.text(37, 15.7, 'port 23231 - 8.9 %', color='black')
+                    axis.annotate('Mirai variant', xy=(45, 17.5), xytext=(39, 13), arrowprops=arrow_properties, )
+                    text = axis.text(39, 13.7, 'port 6789 - 10.2 %', color='black')
 
-                # 2017
-                # axis.annotate('Hajime scan', size=SIZE, xy=(0.5, 17), xytext=(2, 16), arrowprops=arrow_properties)
-                # text = axis.text(2, 16.8, 'port 5358 - 2.0 %', color='black', size=SIZE)
-                # axis.annotate('Unindentified scan', size=SIZE, xy=(10, 16.5), xytext=(9, 19), arrowprops=arrow_properties)
-                # text = axis.text(9, 19.8, 'port 993 - 0.8 %', color='black', size=SIZE)
-                # axis.annotate('IOT botnet', size=SIZE, xy=(21, 17.5), xytext=(20, 20), arrowprops=arrow_properties)
-                # text = axis.text(20, 20.8, 'port 81 - <0.1 %', color='black', size=SIZE)
-                # axis.annotate('Scan drop', size=SIZE, xy=(30, 20.5), xytext=(25, 15), arrowprops=arrow_properties)
-                # text = axis.text(25, 15.8, 'port 23 - 25.8 %', color='black', size=SIZE)
-                # axis.annotate('Scan drop', size=SIZE, xy=(31, 18.5), xytext=(25, 15), arrowprops=arrow_properties)
-                # axis.annotate('Scan drop', size=SIZE, xy=(32, 17.5), xytext=(25, 15), arrowprops=arrow_properties)
-                # axis.annotate('Satori botnet', size=SIZE, xy=(50, 19.5), xytext=(44, 16), arrowprops=arrow_properties)
-                # axis.annotate('Satori botnet', size=SIZE, xy=(50.5, 16), xytext=(44, 16), arrowprops=arrow_properties)
-                # text = axis.text(44, 16.8, 'port 37215 - <0.1 %', color='black', size=SIZE)
-                # axis.annotate('Satori botnet', size=SIZE, xy=(50.5, 15), xytext=(45, 13.5), arrowprops=arrow_properties)
-                # text = axis.text(45, 14.3, 'port 52869 - <0.1 %', color='black', size=SIZE)
+                elif PERIOD == 2017:
+                    axis.annotate('Hajime scan', xy=(0.5, 17), xytext=(2, 16), arrowprops=arrow_properties)
+                    text = axis.text(2, 16.8, 'port 5358 - 2.0 %', color='black')
+                    axis.annotate('Unindentified scan', xy=(10, 16.5), xytext=(9, 19), arrowprops=arrow_properties)
+                    text = axis.text(9, 19.8, 'port 993 - 0.8 %', color='black')
+                    axis.annotate('IoT botnet', xy=(21, 17.5), xytext=(20, 20), arrowprops=arrow_properties)
+                    text = axis.text(20, 20.8, 'port 81 - <0.1 %', color='black')
+                    axis.annotate('Scan drop', xy=(30, 20.5), xytext=(25, 15), arrowprops=arrow_properties)
+                    text = axis.text(25, 15.8, 'port 23 - 25.8 %', color='black')
+                    axis.annotate('Scan drop', xy=(31, 18.5), xytext=(25, 15), arrowprops=arrow_properties)
+                    axis.annotate('Scan drop', xy=(32, 17.5), xytext=(25, 15), arrowprops=arrow_properties)
+                    axis.annotate('Satori botnet', xy=(50, 19.5), xytext=(44, 16), arrowprops=arrow_properties)
+                    axis.annotate('Satori botnet', xy=(50.5, 16), xytext=(44, 16), arrowprops=arrow_properties)
+                    text = axis.text(44, 16.8, 'port 37215 - <0.1 %', color='black')
+                    axis.annotate('Satori botnet', xy=(50.5, 15), xytext=(45, 13.5), arrowprops=arrow_properties)
+                    text = axis.text(45, 14.3, 'port 52869 - <0.1 %', color='black')
 
-                # 2018
-                axis.annotate('Massive scan', size=SIZE, xy=(5, 14.5), xytext=(5, 13), arrowprops=arrow_properties)
-                axis.annotate('Massive scan', size=SIZE, xy=(9, 15.5), xytext=(5, 13), arrowprops=arrow_properties)
-                text = axis.text(5, 13.8, 'port 81 - 0.5 %', color='black', size=SIZE)
-                axis.annotate('Memcached', size=SIZE, xy=(7.8, 11.8), xytext=(9.1, 12.3), arrowprops=arrow_properties)
-                text = axis.text(9.1, 13, 'port 11211 - 0.2%', color='black', size=SIZE)
-                axis.annotate('ADB.Miner', size=SIZE, xy=(6.2, 15.5), xytext=(2.5, 16.5), arrowprops=arrow_properties)
-                text = axis.text(2.5, 17.3, 'port 5555 - 0.6 %', color='black', size=SIZE)
-                axis.annotate('Massive scan', size=SIZE, xy=(13, 16.5), xytext=(11.5, 14.5), arrowprops=arrow_properties)
-                text = axis.text(11.5, 15.3, 'port 2000 - 2.8 %', color='black', size=SIZE)
-                axis.annotate('Hajime scan', size=SIZE, xy=(12.5, 18), xytext=(8, 17.5), arrowprops=arrow_properties)
-                text = axis.text(8, 18.3, 'port 8291 - 0.3 %', color='black', size=SIZE)
-                axis.annotate('Scan break', size=SIZE, xy=(17, 15.5), xytext=(18, 17), arrowprops=arrow_properties)
-                axis.annotate('Scan break', size=SIZE, xy=(16, 16.5), xytext=(18, 17), arrowprops=arrow_properties)
-                text = axis.text(18, 17.8, 'port 23 - 23.7 %', color='black', size=SIZE)
-                axis.annotate('Exploit', size=SIZE, xy=(25, 15.5), xytext=(26, 17), arrowprops=arrow_properties)
-                text = axis.text(26, 17.8, 'port 60001 - 0.2 %', color='black', size=SIZE)
-                axis.annotate('Credential leak (Netwave)', size=SIZE, xy=(35, 15.5), xytext=(37, 17), arrowprops=arrow_properties)
-                text = axis.text(37, 17.8, 'port 8000 - 0.3 %', color='black', size=SIZE)
+                else:
+                    axis.annotate('Massive scan', xy=(5, 14.5), xytext=(5, 13), arrowprops=arrow_properties)
+                    axis.annotate('Massive scan', xy=(9, 15.5), xytext=(5, 13), arrowprops=arrow_properties)
+                    text = axis.text(5, 13.8, 'port 81 - 0.5 %', color='black')
+                    axis.annotate('Memcached', xy=(7.8, 11.8), xytext=(9.1, 12.3), arrowprops=arrow_properties)
+                    text = axis.text(9.1, 13, 'port 11211 - 0.2%', color='black')
+                    axis.annotate('ADB.Miner', xy=(6.2, 15.5), xytext=(2.5, 16.5), arrowprops=arrow_properties)
+                    text = axis.text(2.5, 17.3, 'port 5555 - 0.6 %', color='black')
+                    axis.annotate('Massive scan', xy=(13, 16.5), xytext=(11.5, 14.5), arrowprops=arrow_properties)
+                    text = axis.text(11.5, 15.3, 'port 2000 - 2.8 %', color='black')
+                    axis.annotate('Hajime scan', xy=(12.5, 18), xytext=(8, 17.5), arrowprops=arrow_properties)
+                    text = axis.text(8, 18.3, 'port 8291 - 0.3 %', color='black')
+                    axis.annotate('Scan break', xy=(17, 15.5), xytext=(18, 17), arrowprops=arrow_properties)
+                    axis.annotate('Scan break', xy=(16, 16.5), xytext=(18, 17), arrowprops=arrow_properties)
+                    text = axis.text(18, 17.8, 'port 23 - 23.7 %', color='black')
+                    axis.annotate('Exploit', xy=(25, 15.5), xytext=(26, 17), arrowprops=arrow_properties)
+                    text = axis.text(26, 17.8, 'port 60001 - 0.2 %', color='black')
+                    axis.annotate('Credential leak (Netwave)', xy=(35, 15.5), xytext=(37, 17), arrowprops=arrow_properties)
+                    text = axis.text(37, 17.8, 'port 8000 - 0.3 %', color='black')
 
     if not os.path.exists(PATH_FIGURES):
         os.mkdir(PATH_FIGURES)
     fig.savefig(path_join(PATH_FIGURES, 'heatmap', N_MIN, N_DAYS, PERIOD, 'png'),
+                dpi=1000, bbox_inches='tight', figsize=(15, 4))
+
+def occurrences_heatmap():
+    test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
+                                'separated', PERIOD, T, N_MIN,
+                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+
+    dataset_sum = pd.DataFrame(columns=list(test.columns))
+    for feat in FEATURES:
+        feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                              'separated', PERIOD, T, N_MIN,
+                               N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+        feat_df = feat_df.applymap(sign_to_score)
+        dataset_sum = dataset_sum.add(feat_df, fill_value=0)
+
+    result = dataset_sum.apply(pd.Series.value_counts)
+    result = result.iloc[1:]
+    annot_matrix = result.copy(deep=True)
+    result.apply(value_to_yaxis, axis=1)
+    data_annot = np.array(annot_matrix)
+    data = np.array(result)
+
+    dict_scores = dict.fromkeys([int(x) for x in list(result.index)], 0)
+    for i, score in enumerate(dict_scores.keys()):
+        res = np.nansum([data_annot[i][j] for j, col in enumerate(list(result.columns))])
+        dict_scores[score] = np.round(res / len(result.columns), 2)
+
+    dict_cumsum = dict.fromkeys(dict_scores.keys(), 0)
+    for index, key in enumerate(dict_cumsum.keys()):
+        dict_cumsum[key] = np.round(np.nansum(list(dict_scores.values())[index:]), 2)
+    print(dict_cumsum)
+
+    fig, ax = plt.subplots()
+    ax.set_yscale("log")
+    ax.bar(dict_scores.keys(), dict_scores.values())
+    ax.set_xticks(list(dict_scores.keys()))
+    ax.tick_params(axis='both', which='major', labelsize=7)
+    ax.set_ylabel('Mean occurence per day', fontsize=9)
+    ax.set_xlabel('Anomaly Score', fontsize=9)
+    
+    fig.savefig(path_join(PATH_FIGURES, 'occurrences_anomalies', N_MIN, N_DAYS, PERIOD, 'png'),
                 dpi=1000, bbox_inches='tight')
 
 def get_sum_string(element):
@@ -248,8 +290,8 @@ def color(pos):
     return 'white' if int(pos[1:]) > 6 else 'black'
     
 def main(argv):
-    heatmap_scores()
-    # print_hm()
+    # heatmap_scores()
+    occurrences_heatmap()
     # heatmap_anomalies()
     return 0
 

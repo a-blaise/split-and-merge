@@ -140,7 +140,45 @@ def plot_results(type_comparison):
     axis.set_ylabel('Number of anomalies')
     axis.legend()
 
-    fig.savefig(path_join(PATH_FIGURES, 'results', type_comparison, 'png'), dpi=300)
+    fig.savefig(path_join(PATH_FIGURES, 'thresholds', type_comparison, 'png'), dpi=800)
+
+
+def plot_results_2(type_comparison):
+    intervals = NB_MINS if type_comparison == 'N_MIN' else NB_DAYS
+
+    files = {}
+    nb_anomalies = dict.fromkeys(intervals, {})
+
+    for interval in intervals:
+        files[interval] = open(path_join(PATH_EVAL, 'anomalies', type_comparison, PERIOD, interval, 'txt'), 'r')
+        elements = files[interval].read().split(',')[:-1]
+        files[interval].close()
+        nb_anomalies[interval] = {}
+        for threshold in THRESHOLDS:
+            elements = list(filter(lambda an: int(an.split('|')[2]) > threshold, elements)) 
+            nb_anomalies[interval][threshold] = len(list(set(elements)))
+
+    fig, axis = plt.subplots()
+    bin_width = 0.2
+    widths = np.arange((-len(THRESHOLDS) + 1) / 2, (len(THRESHOLDS) + 1) / 2, bin_width)
+
+    for i, interval in enumerate(intervals):
+        points = []
+        for threshold in THRESHOLDS:
+            points.append(nb_anomalies[interval][threshold])
+        axis.bar([threshold + widths[i] for threshold in THRESHOLDS], points, width=bin_width, label=r'$N_{days}$ = ' + str(interval))
+
+    # axis.set_xticks([inter - 4 for inter in intervals])
+    # axis.set_xticklabels(intervals)
+
+    axis.set_xticks([threshold - 4 for threshold in THRESHOLDS])
+    # axis.set_xticklabels(intervals)
+
+    axis.set_xlabel('Threshold')
+    axis.set_ylabel('Number of anomalies')
+    axis.legend()
+
+    fig.savefig(path_join(PATH_FIGURES, 'thresholds_2', type_comparison, 'png'), dpi=300)
 
 def comparison(type_comparison, baseline, intervals):
     files = {}
@@ -310,7 +348,7 @@ def additional_infos(subnets):
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
-    anomalies_ndays(subnets)
+    # anomalies_ndays(subnets)
     # anomalies_nmins(subnets)
 
     baseline_day = 10
@@ -318,6 +356,9 @@ def main(argv):
 
     # plot_results('N_DAYS')
     # plot_results('N_MIN')
+
+    plot_results_2('N_DAYS')
+    plot_results_2('N_MIN')
 
     # comparison('N_DAYS', baseline_day)
     # comparison_threshold('N_DAYS', baseline_day)

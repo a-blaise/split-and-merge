@@ -23,6 +23,7 @@ import matplotlib.ticker as plticker
 from settings import *
 from features import FEATURES, FIGURES
 from full_detection import path_join, pre_computation, sign_to_score
+from matplotlib import rcParams
 
 def plot_time_series(original_subnets):
     """Plot feature time series and modified Z-score evolution for each port."""
@@ -146,6 +147,7 @@ def compute_mse_feature(original_subnets):
     packets = pd.read_csv(path_join(PATH_PACKETS, 'packets_subnets_separated', PERIOD, 'csv'),
                           dtype={'nb_packets': int})
     packets = packets[packets.nb_packets > N_MIN]
+    rcParams.update({'figure.autolayout': True})
 
     for subnet in original_subnets:
         packets_subnet = packets[packets.key == subnet]
@@ -184,7 +186,8 @@ def compute_mse_feature(original_subnets):
                         feat.mse_median.append(error_median)
                 feat.reset_object()
 
-    fig_mse_mean, ax_mse_mean = plt.subplots()
+    fig_mse_mean, ax_mse_mean = plt.subplots(figsize=(5, 3.5))
+    fig_mse_mean.tight_layout()
     for i, feat in enumerate(FEATURES):
         if feat.mse_mean:
             x_coordinates, y_coordinates = ecdf(feat.mse_mean)
@@ -203,14 +206,14 @@ def compute_mse_feature(original_subnets):
                 legend = 'nbPackets'
             ax_mse_mean.plot(x_coordinates, y_coordinates, label=legend, linestyle=LINESTYLES[i % 4])
 
-    # ax_mse_mean.set_title('CDF MSE per feature - Model: mean/std')
-    ax_mse_mean.set_xlabel('Mean Squared Error')
-    ax_mse_mean.set_ylabel('Cumulative probability')
-    legend = ax_mse_mean.legend(loc='lower right', shadow=True)
+    ax_mse_mean.set_xlabel('Mean Squared Error', fontsize=12)
+    ax_mse_mean.set_ylabel('Cumulative probability', fontsize=12)
+    legend = ax_mse_mean.legend(loc='lower right', shadow=True, numpoints=1, prop={'size':'12'})
     ax_mse_mean.grid(True)
-    fig_mse_mean.savefig(path_join(PATH_FIGURES, 'ecdf_mean', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=300)
+    fig_mse_mean.savefig(path_join(PATH_FIGURES, 'ecdf_mean', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=800)
 
-    fig_mse_median, ax_mse_median = plt.subplots()
+    fig_mse_median, ax_mse_median = plt.subplots(figsize=(5, 3.5))
+    fig_mse_median.tight_layout()
     for i, feat in enumerate(FEATURES):
         if feat.mse_median:
             x_coordinates, y_coordinates = ecdf(feat.mse_median)
@@ -229,12 +232,11 @@ def compute_mse_feature(original_subnets):
                 legend = 'nbPackets'
             ax_mse_median.plot(x_coordinates, y_coordinates, label=legend, linestyle=LINESTYLES[i % 4])
 
-    # ax_mse_median.set_title('CDF MSE per feature - Model: median/mad')
-    ax_mse_median.set_xlabel('Mean Squared Error')
-    ax_mse_median.set_ylabel('Cumulative probability')
-    legend = ax_mse_median.legend(loc='lower right', shadow=True)
+    ax_mse_median.set_xlabel('Mean Squared Error', fontsize=12)
+    ax_mse_median.set_ylabel('Cumulative probability', fontsize=12)
+    legend = ax_mse_median.legend(loc='lower right', shadow=True, numpoints=1, prop={'size':'12'})
     ax_mse_median.grid(True)
-    fig_mse_median.savefig(path_join(PATH_FIGURES, 'ecdf_median', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=300)
+    fig_mse_median.savefig(path_join(PATH_FIGURES, 'ecdf_median', PERIOD, BINS_SIZE, N_DAYS, 'png'), dpi=800)
 
 def ecdf(data):
     raw_data = np.array(data)
@@ -502,6 +504,8 @@ def relevant_features():
 
 def bars_comparative():
     for feat in FEATURES:
+        x_values, y_values = ([] for i in range(2))
+        labels = []
         fig, ax = plt.subplots()
         for method in METHODS:
             ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
@@ -515,33 +519,48 @@ def bars_comparative():
                 temp = res.value_counts().to_dict()
                 results = {k: results.get(k, 0) + temp.get(k, 0) for k in set(results) | set(temp)}
             print(feat.attribute, results)
+            if method == 'agg':
+                x_values.extend([-3, -2])
+                labels.extend(['0', '1'])
+            else:
+                x_values.extend(results.keys())
+                labels.extend([str(x) for x in results.keys()])
+            y_values.extend(results.values())
             
-            legend = 'Aggregated view' if method == 'agg' else 'Splitted view'
-            rects = ax.bar(results.keys(), results.values(), label=legend)
-            ax.set_yscale("log")
-            ax.xaxis.set_major_locator(plticker.MaxNLocator(integer=True))
-            numbers_ports = {}
-            for el in results.keys():
-                numbers_ports[el] = ports[ports == el].index.tolist()
-            for rect in rects:
-                height = rect.get_height()
-                ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
-                        '%d' % int(height), ha='center', va='bottom', size=7)
-        ax.legend()
-        fig.savefig(path_join(PATH_FIGURES, feat.attribute, method, T, N_MIN, N_DAYS, PERIOD, 'png'),
-                    dpi=600, bbox_inches='tight')
+        print(feat.attribute, x_values, y_values)
+        rects = ax.bar(x_values, y_values)
+        ax.set_yscale("log")
+        ax.xaxis.set_major_locator(plticker.MaxNLocator(integer=True))
+        numbers_ports = {}
+        for el in results.keys():
+            numbers_ports[el] = ports[ports == el].index.tolist()
+        for rect in rects:
+            height = rect.get_height()
+            ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
+                    '%d' % int(height), ha='center', va='bottom', size=9)
+        ticketing = [-3, -2]
+        ticketing.extend(range(len(labels) - 1))
+        ax.set_xticks(ticketing)
+        ax.set_xticklabels(labels)
+        ax.set_ylim(-2, 4 * 10**6)
+        plt.axvline(x=-1, linestyle='--', color='black', linewidth=0.5)
+        fig.text(0.12, 0.9, 'Aggregated view')
+        fig.text(0.57, 0.9, 'Splitted view')
+        fig.tight_layout()
+        fig.savefig(path_join(PATH_FIGURES, feat.attribute, method, N_MIN, N_DAYS, PERIOD, 'png'),
+                    dpi=800, bbox_inches='tight')
 
 def main(argv):
     original_subnets, sub_df, subnets = pre_computation()
 
     # plot_time_series(original_subnets)
-    # compute_mse_feature(original_subnets)
+    compute_mse_feature(original_subnets)
     # mse_ndays(subnets)
     # plot_mse_ndays()
     # correlation_features()
     # cor_features_output()
     # relevant_features()
-    bars_comparative()
+    # bars_comparative()
     return 0
 
 if __name__ == '__main__':
