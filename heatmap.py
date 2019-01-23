@@ -154,44 +154,53 @@ def heatmap_scores():
                 dpi=1000, bbox_inches='tight', figsize=(15, 4))
 
 def occurrences_heatmap():
-    test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
-                                'separated', PERIOD, T, N_MIN,
-                                N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+    years = [2016, 2017, 2018]
+    fig, ax = plt.subplots(figsize=(6, 3))
+    labels = []
+    bin_width = 0.25
+    widths = np.arange((-len(years) + 1) / 2, (len(years) + 1) / 2, bin_width)
 
-    dataset_sum = pd.DataFrame(columns=list(test.columns))
-    for feat in FEATURES:
-        feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
-                              'separated', PERIOD, T, N_MIN,
-                               N_DAYS, 'score', 'csv'), sep=';', index_col=0)
-        feat_df = feat_df.applymap(sign_to_score)
-        dataset_sum = dataset_sum.add(feat_df, fill_value=0)
+    for ind_year, year in enumerate(years):
+        test = pd.read_csv(path_join(PATH_EVAL, 'eval', FEATURES[0].attribute,
+                                    'separated', year, T, N_MIN,
+                                    N_DAYS, 'score', 'csv'), sep=';', index_col=0)
 
-    result = dataset_sum.apply(pd.Series.value_counts)
-    result = result.iloc[1:]
-    annot_matrix = result.copy(deep=True)
-    result.apply(value_to_yaxis, axis=1)
-    data_annot = np.array(annot_matrix)
-    data = np.array(result)
+        dataset_sum = pd.DataFrame(columns=list(test.columns))
+        for feat in FEATURES:
+            feat_df = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute,
+                                  'separated', year, T, N_MIN,
+                                   N_DAYS, 'score', 'csv'), sep=';', index_col=0)
+            feat_df = feat_df.applymap(sign_to_score)
+            dataset_sum = dataset_sum.add(feat_df, fill_value=0)
 
-    dict_scores = dict.fromkeys([int(x) for x in list(result.index)], 0)
-    for i, score in enumerate(dict_scores.keys()):
-        res = np.nansum([data_annot[i][j] for j, col in enumerate(list(result.columns))])
-        dict_scores[score] = np.round(res / len(result.columns), 2)
+        result = dataset_sum.apply(pd.Series.value_counts)
+        result = result.iloc[1:]
+        annot_matrix = result.copy(deep=True)
+        result.apply(value_to_yaxis, axis=1)
+        data_annot = np.array(annot_matrix)
+        data = np.array(result)
 
-    dict_cumsum = dict.fromkeys(dict_scores.keys(), 0)
-    for index, key in enumerate(dict_cumsum.keys()):
-        dict_cumsum[key] = np.round(np.nansum(list(dict_scores.values())[index:]), 2)
-    print(dict_cumsum)
+        dict_scores = dict.fromkeys([int(x) for x in list(result.index)], 0)
+        for i, score in enumerate(dict_scores.keys()):
+            res = np.nansum([data_annot[i][j] for j, col in enumerate(list(result.columns))])
+            dict_scores[score] = np.round(res / len(result.columns), 2)
 
-    fig, ax = plt.subplots()
+        dict_cumsum = dict.fromkeys(dict_scores.keys(), 0)
+        for index, key in enumerate(dict_cumsum.keys()):
+            dict_cumsum[key] = np.round(np.nansum(list(dict_scores.values())[index:]), 2)
+        ax.bar([el + widths[ind_year] for el in dict_scores.keys()], dict_scores.values(),
+            width=bin_width, label=str(year))
+        labels.extend(list(dict_scores.keys()))
+        
     ax.set_yscale("log")
-    ax.bar(dict_scores.keys(), dict_scores.values())
-    ax.set_xticks(list(dict_scores.keys()))
-    ax.tick_params(axis='both', which='major', labelsize=7)
-    ax.set_ylabel('Mean occurence per day', fontsize=9)
-    ax.set_xlabel('Anomaly Score', fontsize=9)
+    ax.set_xticks([el - 0.75 for el in list(set(labels))])
+    ax.set_xticklabels(list(set(labels)))
+    ax.tick_params(axis='both', which='major', labelsize=8)
+    ax.set_ylabel('Occurence of AS per day', fontsize=12)
+    ax.set_xlabel('Anomaly Score', fontsize=12)
+    ax.legend()
     
-    fig.savefig(path_join(PATH_FIGURES, 'occurrences_anomalies', N_MIN, N_DAYS, PERIOD, 'png'),
+    fig.savefig(path_join(PATH_FIGURES, 'occurrences_anomalies', N_MIN, N_DAYS, 'png'),
                 dpi=1000, bbox_inches='tight')
 
 def get_sum_string(element):

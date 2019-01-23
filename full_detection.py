@@ -199,7 +199,7 @@ def evaluation_ports(original_subnets):
                                 evaluations[feat.attribute].loc[port, date] += '-' + subnet + ','
 
         for feat in FEATURES:
-            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018-2', T,
+            evaluations[feat.attribute].to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD, T,
                                                          N_MIN, N_DAYS, 'csv'), sep=';')
 
 def get_nb_alarms(x):
@@ -214,7 +214,7 @@ def eval_scores():
     number of anomalous subnets (= number of anomalies)"""
     for method in METHODS:
         for feat in FEATURES:
-            ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, '2018-full',
+            ports = pd.read_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
                                           T, N_MIN, N_DAYS, 'csv'), sep=';', index_col=0)
             ports = ports.applymap(get_nb_alarms).dropna(axis=0, how='all')
             ports.to_csv(path_join(PATH_EVAL, 'eval', feat.attribute, method, PERIOD,
@@ -244,7 +244,7 @@ def main(argv):
 
     # compute_subnets(original_subnets, sub_df)
     # evaluation_ports(original_subnets)
-    eval_scores()
+    # eval_scores()
     # merge_datasets()
     return 0
 
